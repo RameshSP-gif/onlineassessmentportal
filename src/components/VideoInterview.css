@@ -1,0 +1,264 @@
+.interview-header {
+  margin-bottom: 30px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 15px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.5s ease;
+}
+
+.interview-content {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.question-box {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 30px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.question-box h3 {
+  color: white;
+  font-size: 24px;
+  margin: 0;
+}
+
+.video-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.video-container {
+  position: relative;
+  background: #000;
+  border-radius: 10px;
+  overflow: hidden;
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-preview {
+  width: 100%;
+  height: auto;
+  max-height: 500px;
+}
+
+.video-placeholder {
+  color: white;
+  text-align: center;
+  padding: 40px;
+}
+
+.recording-indicator {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(245, 101, 101, 0.9);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 25px;
+  font-weight: 600;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.recording-controls {
+  text-align: center;
+}
+
+.btn-large {
+  padding: 15px 40px;
+  font-size: 18px;
+  min-width: 250px;
+}
+
+.tips-box {
+  background: #f7fafc;
+  padding: 20px;
+  border-radius: 10px;
+  border-left: 4px solid #667eea;
+}
+
+.tips-box h4 {
+  margin-bottom: 15px;
+  color: #2d3748;
+}
+
+.tips-box ul {
+  margin-left: 20px;
+}
+
+.tips-box li {
+  margin-bottom: 8px;
+  color: #4a5568;
+}
+
+.result-section {
+  text-align: center;
+  padding: 20px;
+}
+
+.result-section h2 {
+  color: #48bb78;
+  font-size: 32px;
+  margin-bottom: 30px;
+}
+
+.ai-result-card {
+  background: #f7fafc;
+  padding: 30px;
+  border-radius: 10px;
+  margin: 30px 0;
+}
+
+.ai-result-card h3 {
+  color: #667eea;
+  margin-bottom: 20px;
+}
+
+.score-display {
+  margin: 30px 0;
+}
+
+.score-circle {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.score-number {
+  font-size: 48px;
+  font-weight: 700;
+}
+
+.score-label {
+  font-size: 20px;
+}
+
+.metrics-grid {
+  display: grid;
+  gap: 20px;
+  margin: 30px 0;
+  text-align: left;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metric-label {
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.metric-bar {
+  height: 10px;
+  background: #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.metric-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.5s ease;
+}
+
+.metric-value {
+  font-weight: 600;
+  color: #667eea;
+  font-size: 14px;
+}
+
+.feedback-box {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: left;
+  margin-top: 20px;
+}
+
+.feedback-box h4 {
+  color: #667eea;
+  margin-bottom: 10px;
+}
+
+.feedback-box p {
+  color: #4a5568;
+  line-height: 1.6;
+}
+
+.camera-error-box {
+  background: #fff5f5;
+  border: 2px solid #fc8181;
+  border-radius: 10px;
+  padding: 20px;
+  margin: 20px 0;
+  color: #742a2a;
+}
+
+.camera-error-box h4 {
+  color: #c53030;
+  margin-bottom: 10px;
+}
+
+.camera-error-box p {
+  margin-bottom: 15px;
+  font-size: 16px;
+}
+
+.error-instructions {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  margin: 15px 0;
+}
+
+.error-instructions strong {
+  color: #2d3748;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.error-instructions ol {
+  margin-left: 20px;
+  color: #4a5568;
+}
+
+.error-instructions li {
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.camera-error-box .btn {
+  margin-top: 10px;
+}

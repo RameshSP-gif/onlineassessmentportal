@@ -1,0 +1,17 @@
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.auth-card {
+  max-width: 450px;
+  width: 100%;
+}
+
+.auth-card h1 {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
