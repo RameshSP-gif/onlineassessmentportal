@@ -9,27 +9,34 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 
 // MongoDB Atlas connection (free tier)
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://testuser:testpass123@cluster0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://admin:admin123@cluster0.vudmb.mongodb.net/assessment?retryWrites=true&w=majority';
 let cachedDb = null;
 
 async function connectDB() {
   if (cachedDb) return cachedDb;
   
-  const client = await MongoClient.connect(MONGODB_URI);
-  const db = client.db('assessment');
-  cachedDb = db;
-  
-  // Seed if empty
-  const count = await db.collection('exams').countDocuments();
-  if (count === 0) {
-    const hashedPassword = await bcrypt.hash('admin123', 10);
-    await db.collection('users').insertOne({
-      username: 'admin',
-      email: 'admin@assessment.com',
-      password: hashedPassword,
-      role: 'admin',
-      created_at: new Date()
+  try {
+    const client = await MongoClient.connect(MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 5000
     });
+    const db = client.db('assessment');
+    cachedDb = db;
+    console.log('✅ Connected to MongoDB');
+    
+    // Seed if empty
+    const count = await db.collection('exams').countDocuments();
+    if (count === 0) {
+      console.log('🌱 Seeding database...');
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      await db.collection('users').insertOne({
+        username: 'admin',
+        email: 'admin@assessment.com',
+        password: hashedPassword,
+        role: 'admin',
+        created_at: new Date()
+      });
     
     const questions = [
       { question_text: 'What is JavaScript?', option_a: 'A programming language', option_b: 'A database', option_c: 'An operating system', option_d: 'A web browser', correct_answer: 'a', marks: 1 },
@@ -56,6 +63,11 @@ async function connectDB() {
   }
   
   return db;
+  } catch (error) {
+    console.error('❌ MongoDB connection error:', error.message);
+    // Return a mock object that won't crash the app
+    throw error;
+  }
 }
 
 // Middleware
