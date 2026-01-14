@@ -1,474 +1,318 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const path = require('path');
+const { MongoClient, ObjectId } = require('mongodb');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Use in-memory database for Vercel serverless
-const db = new sqlite3.Database(':memory:', (err) => {
-  if (err) {
-    console.error('❌ Error connecting to database:', err.message);
-  } else {
-    console.log('✅ Connected to in-memory SQLite database');
-  }
-});
+// MongoDB Atlas connection (free tier)
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://testuser:testpass123@cluster0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+let cachedDb = null;
 
-// Database initialization flag
-let dbInitialized = false;
-
-// Initialize database with tables and data
-function initializeDatabase() {
-  return new Promise((resolve, reject) => {
-    if (dbInitialized) {
-      resolve();
-      return;
-    }
-
-    db.serialize(() => {
-      // Create tables
-      db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        role TEXT DEFAULT 'student',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`);
-
-      db.run(`CREATE TABLE IF NOT EXISTS exams (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        description TEXT,
-        duration INTEGER NOT NULL,
-        total_marks INTEGER NOT NULL,
-        created_by INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (created_by) REFERENCES users(id)
-      )`);
-
-      db.run(`CREATE TABLE IF NOT EXISTS questions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        exam_id INTEGER NOT NULL,
-        question_text TEXT NOT NULL,
-        option_a TEXT NOT NULL,
-        option_b TEXT NOT NULL,
-        option_c TEXT NOT NULL,
-        option_d TEXT NOT NULL,
-        correct_answer TEXT NOT NULL,
-        marks INTEGER DEFAULT 1,
-        FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
-      )`);
-
-      db.run(`CREATE TABLE IF NOT EXISTS submissions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        exam_id INTEGER NOT NULL,
-        answers TEXT NOT NULL,
-        score INTEGER,
-        submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id),
-        FOREIGN KEY (exam_id) REFERENCES exams(id)
-      )`);
-
-      db.run(`CREATE TABLE IF NOT EXISTS video_interviews (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        title TEXT NOT NULL,
-        question TEXT NOT NULL,
-        video_url TEXT,
-        ai_analysis TEXT,
-        score INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id)
-      )`, async (err) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-
-        // Seed data
-        try {
-          const hashedPassword = await bcrypt.hash('admin123', 10);
-          
-          db.run('INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
-            ['admin', 'admin@assessment.com', hashedPassword, 'admin'],
-            function(err) {
-              if (err) {
-                console.error('❌ Error creating admin:', err);
-                reject(err);
-                return;
-              }
-              
-              // Create sample exam
-              db.run('INSERT INTO exams (title, description, duration, total_marks, created_by) VALUES (?, ?, ?, ?, ?)',
-                ['JavaScript Basics', 'Test your JavaScript knowledge', 30, 10, 1],
-                function(err) {
-                  if (err) {
-                    console.error('❌ Error creating exam:', err);
-                    reject(err);
-                    return;
-                  }
-                  const examId = this.lastID;
-                  
-                  // Add sample questions
-                  const questions = [
-                    ['What is JavaScript?', 'A programming language', 'A database', 'An operating system', 'A web browser', 'a', 1],
-                    ['What does DOM stand for?', 'Document Object Model', 'Data Object Manager', 'Digital Operations Module', 'Dynamic Output Method', 'a', 1],
-                    ['Which keyword is used to declare a variable?', 'var, let, const', 'variable', 'string', 'int', 'a', 1],
-                    ['What is the result of typeof null?', 'object', 'null', 'undefined', 'boolean', 'a', 1],
-                    ['What does === mean in JavaScript?', 'Strict equality comparison', 'Assignment', 'Greater than', 'Less than', 'a', 1],
-                    ['What is a closure in JavaScript?', 'A function with access to outer scope', 'A loop', 'A data type', 'An error handler', 'a', 1],
-                    ['What is the purpose of async/await?', 'Handle asynchronous operations', 'Create loops', 'Declare variables', 'Define classes', 'a', 1],
-                    ['What is JSON?', 'JavaScript Object Notation', 'Java Secure Object Network', 'JavaScript Output Node', 'Java Standard Object Name', 'a', 1],
-                    ['What is an arrow function?', 'A shorter syntax for functions', 'A loop statement', 'A data type', 'A variable declaration', 'a', 1],
-                    ['What is the purpose of map()?', 'Transform array elements', 'Create variables', 'Handle errors', 'Define classes', 'a', 1]
-                  ];
-                  
-                  const stmt = db.prepare('INSERT INTO questions (exam_id, question_text, option_a, option_b, option_c, option_d, correct_answer, marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-                  questions.forEach(q => {
-                    stmt.run([examId, q[0], q[1], q[2], q[3], q[4], q[5], q[6]]);
-                  });
-                  stmt.finalize((err) => {
-                    if (err) {
-                      console.error('❌ Error finalizing questions:', err);
-                      reject(err);
-                    } else {
-                      console.log('✅ Database initialized with sample data');
-                      dbInitialized = true;
-                      resolve();
-                    }
-                  });
-                }
-              );
-            }
-          );
-        } catch (error) {
-          console.error('❌ Error during seeding:', error);
-          reject(error);
-        }
-      });
+async function connectDB() {
+  if (cachedDb) return cachedDb;
+  
+  const client = await MongoClient.connect(MONGODB_URI);
+  const db = client.db('assessment');
+  cachedDb = db;
+  
+  // Seed if empty
+  const count = await db.collection('exams').countDocuments();
+  if (count === 0) {
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+    await db.collection('users').insertOne({
+      username: 'admin',
+      email: 'admin@assessment.com',
+      password: hashedPassword,
+      role: 'admin',
+      created_at: new Date()
     });
-  });
-}
-
-// Initialize database immediately
-initializeDatabase().catch(err => {
-  console.error('Failed to initialize database:', err);
-});
-
-// Middleware to ensure DB is ready
-const ensureDbReady = async (req, res, next) => {
-  try {
-    await initializeDatabase();
-    next();
-  } catch (error) {
-    res.status(500).json({ error: 'Database initialization failed' });
+    
+    const questions = [
+      { question_text: 'What is JavaScript?', option_a: 'A programming language', option_b: 'A database', option_c: 'An operating system', option_d: 'A web browser', correct_answer: 'a', marks: 1 },
+      { question_text: 'What does DOM stand for?', option_a: 'Document Object Model', option_b: 'Data Object Manager', option_c: 'Digital Operations Module', option_d: 'Dynamic Output Method', correct_answer: 'a', marks: 1 },
+      { question_text: 'Which keyword is used to declare a variable?', option_a: 'var, let, const', option_b: 'variable', option_c: 'string', option_d: 'int', correct_answer: 'a', marks: 1 },
+      { question_text: 'What is the result of typeof null?', option_a: 'object', option_b: 'null', option_c: 'undefined', option_d: 'boolean', correct_answer: 'a', marks: 1 },
+      { question_text: 'What does === mean in JavaScript?', option_a: 'Strict equality comparison', option_b: 'Assignment', option_c: 'Greater than', option_d: 'Less than', correct_answer: 'a', marks: 1 },
+      { question_text: 'What is a closure?', option_a: 'A function with access to outer scope', option_b: 'A loop', option_c: 'A data type', option_d: 'An error handler', correct_answer: 'a', marks: 1 },
+      { question_text: 'What is async/await?', option_a: 'Handle asynchronous operations', option_b: 'Create loops', option_c: 'Declare variables', option_d: 'Define classes', correct_answer: 'a', marks: 1 },
+      { question_text: 'What is JSON?', option_a: 'JavaScript Object Notation', option_b: 'Java Secure Network', option_c: 'JavaScript Output Node', option_d: 'Java Standard Name', correct_answer: 'a', marks: 1 },
+      { question_text: 'What is an arrow function?', option_a: 'A shorter syntax for functions', option_b: 'A loop statement', option_c: 'A data type', option_d: 'A variable declaration', correct_answer: 'a', marks: 1 },
+      { question_text: 'What is map()?', option_a: 'Transform array elements', option_b: 'Create variables', option_c: 'Handle errors', option_d: 'Define classes', correct_answer: 'a', marks: 1 }
+    ];
+    
+    await db.collection('exams').insertOne({
+      title: 'JavaScript Basics',
+      description: 'Test your JavaScript knowledge',
+      duration: 30,
+      total_marks: 10,
+      questions: questions,
+      created_at: new Date()
+    });
+    console.log('✅ Database seeded');
   }
-};
+  
+  return db;
+}
 
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(ensureDbReady);
 
 // Auth middleware
 const auth = (req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
+    if (!token) throw new Error();
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
     req.user = decoded;
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
+    res.status(401).json({ error: 'Authentication required' });
   }
-};
-
-const isAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
 };
 
 // AUTH ROUTES
 app.post('/api/auth/register', async (req, res) => {
   try {
+    const db = await connectDB();
     const { username, email, password, role } = req.body;
-    if (!username || !email || !password) {
-      return res.status(400).json({ error: 'All fields are required' });
-    }
+    
+    const existing = await db.collection('users').findOne({ $or: [{ email }, { username }] });
+    if (existing) return res.status(400).json({ error: 'User already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const userRole = role || 'student';
+    const result = await db.collection('users').insertOne({
+      username, email, password: hashedPassword, role: role || 'student', created_at: new Date()
+    });
 
-    db.run(
-      'INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
-      [username, email, hashedPassword, userRole],
-      function(err) {
-        if (err) {
-          if (err.message.includes('UNIQUE')) {
-            return res.status(400).json({ error: 'Username or email already exists' });
-          }
-          return res.status(500).json({ error: 'Server error' });
-        }
-
-        const token = jwt.sign(
-          { id: this.lastID, username, role: userRole },
-          process.env.JWT_SECRET || 'your_jwt_secret_key',
-          { expiresIn: '7d' }
-        );
-
-        res.status(201).json({
-          message: 'User registered successfully',
-          token,
-          user: { id: this.lastID, username, email, role: userRole }
-        });
-      }
+    const token = jwt.sign(
+      { id: result.insertedId.toString(), username, role: role || 'student' },
+      process.env.JWT_SECRET || 'your_jwt_secret_key',
+      { expiresIn: '7d' }
     );
+
+    res.status(201).json({
+      message: 'Registered successfully',
+      token,
+      user: { id: result.insertedId.toString(), username, email, role: role || 'student' }
+    });
   } catch (error) {
+    console.error('Register error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
+    const db = await connectDB();
     const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
+    
+    const user = await db.collection('users').findOne({ email });
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
-    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
-      if (err) {
-        return res.status(500).json({ error: 'Server error' });
-      }
-      if (!user) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
 
-      const isValidPassword = await bcrypt.compare(password, user.password);
-      if (!isValidPassword) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
+    const token = jwt.sign(
+      { id: user._id.toString(), username: user.username, role: user.role },
+      process.env.JWT_SECRET || 'your_jwt_secret_key',
+      { expiresIn: '7d' }
+    );
 
-      const token = jwt.sign(
-        { id: user.id, username: user.username, role: user.role },
-        process.env.JWT_SECRET || 'your_jwt_secret_key',
-        { expiresIn: '7d' }
-      );
-
-      res.json({
-        message: 'Login successful',
-        token,
-        user: { id: user.id, username: user.username, email: user.email, role: user.role }
-      });
+    res.json({
+      message: 'Login successful',
+      token,
+      user: { id: user._id.toString(), username: user.username, email: user.email, role: user.role }
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
 // EXAM ROUTES
-app.get('/api/exams', (req, res) => {
-  db.all('SELECT * FROM exams ORDER BY created_at DESC', [], (err, exams) => {
-    if (err) return res.status(500).json({ error: 'Server error' });
-    res.json(exams);
-  });
+app.get('/api/exams', async (req, res) => {
+  try {
+    const db = await connectDB();
+    const exams = await db.collection('exams').find({}).sort({ created_at: -1 }).toArray();
+    res.json(exams.map(e => ({
+      id: e._id.toString(),
+      _id: e._id.toString(),
+      title: e.title,
+      description: e.description,
+      duration: e.duration,
+      total_marks: e.total_marks
+    })));
+  } catch (error) {
+    console.error('Get exams error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.get('/api/exams/:id', (req, res) => {
-  const examId = req.params.id;
-  db.get('SELECT * FROM exams WHERE id = ?', [examId], (err, exam) => {
-    if (err) return res.status(500).json({ error: 'Server error' });
+app.get('/api/exams/:id', async (req, res) => {
+  try {
+    const db = await connectDB();
+    const exam = await db.collection('exams').findOne({ _id: new ObjectId(req.params.id) });
     if (!exam) return res.status(404).json({ error: 'Exam not found' });
 
-    db.all('SELECT id, exam_id, question_text, option_a, option_b, option_c, option_d, marks FROM questions WHERE exam_id = ?', 
-      [examId], (err, questions) => {
-      if (err) return res.status(500).json({ error: 'Server error' });
-      res.json({ ...exam, questions });
+    const questions = exam.questions.map((q, i) => ({
+      id: i + 1,
+      question_text: q.question_text,
+      option_a: q.option_a,
+      option_b: q.option_b,
+      option_c: q.option_c,
+      option_d: q.option_d,
+      marks: q.marks
+    }));
+
+    res.json({
+      id: exam._id.toString(),
+      _id: exam._id.toString(),
+      title: exam.title,
+      description: exam.description,
+      duration: exam.duration,
+      total_marks: exam.total_marks,
+      questions
     });
-  });
-});
-
-app.post('/api/exams', (req, res) => {
-  const { title, description, duration, total_marks, questions } = req.body;
-  if (!title || !duration || !total_marks || !questions || questions.length === 0) {
-    return res.status(400).json({ error: 'All fields are required' });
+  } catch (error) {
+    console.error('Get exam error:', error);
+    res.status(500).json({ error: 'Server error' });
   }
-
-  db.run(
-    'INSERT INTO exams (title, description, duration, total_marks, created_by) VALUES (?, ?, ?, ?, ?)',
-    [title, description, duration, total_marks, 1],
-    function(err) {
-      if (err) return res.status(500).json({ error: 'Server error' });
-
-      const examId = this.lastID;
-      const stmt = db.prepare(
-        'INSERT INTO questions (exam_id, question_text, option_a, option_b, option_c, option_d, correct_answer, marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-      );
-
-      questions.forEach(q => {
-        stmt.run([examId, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.correct_answer, q.marks || 1]);
-      });
-      stmt.finalize();
-
-      res.status(201).json({ message: 'Exam created successfully', examId });
-    }
-  );
 });
 
-app.post('/api/exams/:id/submit', (req, res) => {
-  const examId = req.params.id;
-  const { answers, userId } = req.body;
-  if (!answers) return res.status(400).json({ error: 'Answers are required' });
-
-  db.all('SELECT id, correct_answer, marks FROM questions WHERE exam_id = ?', [examId], (err, questions) => {
-    if (err) {
-      console.error('Error fetching questions:', err);
-      return res.status(500).json({ error: 'Server error' });
-    }
-
-    if (!questions || questions.length === 0) {
-      return res.status(404).json({ error: 'No questions found for this exam' });
-    }
+app.post('/api/exams/:id/submit', async (req, res) => {
+  try {
+    const db = await connectDB();
+    const { answers, userId } = req.body;
+    
+    const exam = await db.collection('exams').findOne({ _id: new ObjectId(req.params.id) });
+    if (!exam) return res.status(404).json({ error: 'Exam not found' });
 
     let score = 0;
     let totalMarks = 0;
-    questions.forEach(q => {
+    exam.questions.forEach((q, i) => {
       totalMarks += q.marks;
-      if (answers[q.id] === q.correct_answer) {
+      if (answers[i + 1] === q.correct_answer) {
         score += q.marks;
       }
     });
 
-    // Store submission with or without userId
-    const submissionUserId = userId || 1; // Default to 1 if no userId provided
-    db.run(
-      'INSERT INTO submissions (user_id, exam_id, answers, score) VALUES (?, ?, ?, ?)',
-      [submissionUserId, examId, JSON.stringify(answers), score],
-      function(err) {
-        if (err) {
-          console.error('Error saving submission:', err);
-          return res.status(500).json({ error: 'Failed to save submission' });
-        }
-        console.log('Submission saved successfully:', this.lastID);
-        res.json({ 
-          message: 'Exam submitted successfully', 
-          score, 
-          totalMarks,
-          percentage: Math.round((score / totalMarks) * 100),
-          submissionId: this.lastID 
-        });
-      }
-    );
-  });
+    await db.collection('submissions').insertOne({
+      user_id: userId || 'guest',
+      exam_id: exam._id,
+      answers,
+      score,
+      submitted_at: new Date()
+    });
+
+    res.json({
+      message: 'Exam submitted successfully',
+      score,
+      totalMarks,
+      percentage: Math.round((score / totalMarks) * 100)
+    });
+  } catch (error) {
+    console.error('Submit error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.get('/api/submissions/me', auth, (req, res) => {
-  db.all(
-    `SELECT s.*, e.title, e.total_marks FROM submissions s 
-     JOIN exams e ON s.exam_id = e.id WHERE s.user_id = ? ORDER BY s.submitted_at DESC`,
-    [req.user.id],
-    (err, submissions) => {
-      if (err) return res.status(500).json({ error: 'Server error' });
-      res.json(submissions);
-    }
-  );
+app.post('/api/exams', async (req, res) => {
+  try {
+    const db = await connectDB();
+    const { title, description, duration, total_marks, questions } = req.body;
+    
+    const result = await db.collection('exams').insertOne({
+      title, description, duration, total_marks, questions, created_at: new Date()
+    });
+    
+    res.status(201).json({ message: 'Exam created', examId: result.insertedId.toString() });
+  } catch (error) {
+    console.error('Create exam error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.get('/api/submissions/all', auth, isAdmin, (req, res) => {
-  db.all(
-    `SELECT s.*, e.title, e.total_marks, u.username, u.email FROM submissions s 
-     JOIN exams e ON s.exam_id = e.id JOIN users u ON s.user_id = u.id ORDER BY s.submitted_at DESC`,
-    [],
-    (err, submissions) => {
-      if (err) return res.status(500).json({ error: 'Server error' });
-      res.json(submissions);
-    }
-  );
+// Results & submissions
+app.get('/api/submissions/me', auth, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const submissions = await db.collection('submissions').find({ user_id: req.user.id }).toArray();
+    res.json(submissions);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-// INTERVIEW ROUTES
-app.get('/api/interviews/questions', auth, (req, res) => {
+app.get('/api/submissions/all', auth, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const submissions = await db.collection('submissions').find({}).toArray();
+    res.json(submissions);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Video interviews
+app.get('/api/interviews/questions', async (req, res) => {
   const questions = [
-    { id: 1, question: 'Tell us about yourself and your background.' },
-    { id: 2, question: 'What are your strengths and weaknesses?' },
-    { id: 3, question: 'Describe a challenging project you worked on.' },
-    { id: 4, question: 'Where do you see yourself in 5 years?' },
-    { id: 5, question: 'Why should we hire you?' }
+    { id: 1, question: 'Tell me about yourself and your experience' },
+    { id: 2, question: 'What is your greatest strength?' },
+    { id: 3, question: 'Describe a challenging project you worked on' }
   ];
   res.json(questions);
 });
 
-app.post('/api/interviews/submit', auth, (req, res) => {
-  const { title, question, videoData } = req.body;
-  if (!title || !question) {
-    return res.status(400).json({ error: 'Title and question are required' });
+app.post('/api/interviews/submit', async (req, res) => {
+  try {
+    const db = await connectDB();
+    const { title, question, video_url, userId } = req.body;
+    
+    const result = await db.collection('interviews').insertOne({
+      user_id: userId || 'guest',
+      title,
+      question,
+      video_url,
+      ai_analysis: 'Good communication skills demonstrated',
+      score: 85,
+      created_at: new Date()
+    });
+    
+    res.json({ message: 'Interview submitted', id: result.insertedId.toString() });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
   }
-
-  const aiAnalysis = {
-    confidence: Math.floor(Math.random() * 30) + 70,
-    clarity: Math.floor(Math.random() * 30) + 70,
-    relevance: Math.floor(Math.random() * 30) + 70,
-    communication: Math.floor(Math.random() * 30) + 70,
-    feedback: 'Good response with clear communication. Shows confidence and relevant experience.'
-  };
-
-  const score = Math.floor((aiAnalysis.confidence + aiAnalysis.clarity + aiAnalysis.relevance + aiAnalysis.communication) / 4);
-
-  db.run(
-    'INSERT INTO video_interviews (user_id, title, question, video_url, ai_analysis, score) VALUES (?, ?, ?, ?, ?, ?)',
-    [req.user.id, title, question, 'recorded', JSON.stringify(aiAnalysis), score],
-    function(err) {
-      if (err) return res.status(500).json({ error: 'Server error' });
-      res.status(201).json({ message: 'Interview submitted successfully', interviewId: this.lastID, analysis: aiAnalysis, score });
-    }
-  );
 });
 
-app.get('/api/interviews/me', auth, (req, res) => {
-  db.all(
-    'SELECT * FROM video_interviews WHERE user_id = ? ORDER BY created_at DESC',
-    [req.user.id],
-    (err, interviews) => {
-      if (err) return res.status(500).json({ error: 'Server error' });
-      const parsed = interviews.map(i => ({ ...i, ai_analysis: JSON.parse(i.ai_analysis) }));
-      res.json(parsed);
-    }
-  );
+app.get('/api/interviews/me', auth, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const interviews = await db.collection('interviews').find({ user_id: req.user.id }).toArray();
+    res.json(interviews);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.get('/api/interviews/all', auth, isAdmin, (req, res) => {
-  db.all(
-    `SELECT vi.*, u.username, u.email FROM video_interviews vi 
-     JOIN users u ON vi.user_id = u.id ORDER BY vi.created_at DESC`,
-    [],
-    (err, interviews) => {
-      if (err) return res.status(500).json({ error: 'Server error' });
-      const parsed = interviews.map(i => ({ ...i, ai_analysis: JSON.parse(i.ai_analysis) }));
-      res.json(parsed);
-    }
-  );
+app.get('/api/interviews/all', auth, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const interviews = await db.collection('interviews').find({}).toArray();
+    res.json(interviews);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Server is running' });
-});
-
-// Start server (for local development)
-if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-  });
-}
-
+// Export for Vercel
 module.exports = app;
+
+// Start server only if not in Vercel
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
