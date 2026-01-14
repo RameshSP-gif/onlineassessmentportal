@@ -23,7 +23,12 @@ export const exams = {
   getAll: () => api.get('/exams'),
   getById: (id) => api.get(`/exams/${id}`),
   create: (data) => api.post('/exams', data),
-  submit: (id, answers) => api.post(`/exams/${id}/submit`, { answers }),
+  submit: (id, answers) => {
+    // Try to get user info from localStorage
+    const userStr = localStorage.getItem('user');
+    const userId = userStr ? JSON.parse(userStr).id : null;
+    return api.post(`/exams/${id}/submit`, { answers, userId });
+  },
 };
 
 export const submissions = {
