@@ -76,6 +76,60 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   )`);
+
+  // Auto-seed database if empty (for Vercel serverless environment)
+  db.get('SELECT COUNT(*) as count FROM users', async (err, result) => {
+    if (!err && result.count === 0) {
+      console.log('🌱 Database is empty. Auto-seeding...');
+      
+      // Create admin user
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      db.run('INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
+        ['admin', 'admin@assessment.com', hashedPassword, 'admin'],
+        function(err) {
+          if (err) {
+            console.error('❌ Error creating admin:', err);
+            return;
+          }
+          console.log('✅ Admin user created');
+          
+          // Create sample exam
+          db.run('INSERT INTO exams (title, description, duration, total_marks, created_by) VALUES (?, ?, ?, ?, ?)',
+            ['JavaScript Basics', 'Test your JavaScript knowledge', 30, 10, this.lastID],
+            function(err) {
+              if (err) {
+                console.error('❌ Error creating exam:', err);
+                return;
+              }
+              const examId = this.lastID;
+              
+              // Add sample questions
+              const questions = [
+                ['What is JavaScript?', 'A programming language', 'A database', 'An operating system', 'A web browser', 'a', 1],
+                ['What does DOM stand for?', 'Document Object Model', 'Data Object Manager', 'Digital Operations Module', 'Dynamic Output Method', 'a', 1],
+                ['Which keyword is used to declare a variable?', 'var, let, const', 'variable', 'string', 'int', 'a', 1],
+                ['What is the result of typeof null?', 'object', 'null', 'undefined', 'boolean', 'a', 1],
+                ['What does === mean in JavaScript?', 'Strict equality comparison', 'Assignment', 'Greater than', 'Less than', 'a', 1],
+                ['What is a closure in JavaScript?', 'A function with access to outer scope', 'A loop', 'A data type', 'An error handler', 'a', 1],
+                ['What is the purpose of async/await?', 'Handle asynchronous operations', 'Create loops', 'Declare variables', 'Define classes', 'a', 1],
+                ['What is JSON?', 'JavaScript Object Notation', 'Java Secure Object Network', 'JavaScript Output Node', 'Java Standard Object Name', 'a', 1],
+                ['What is an arrow function?', 'A shorter syntax for functions', 'A loop statement', 'A data type', 'A variable declaration', 'a', 1],
+                ['What is the purpose of map()?', 'Transform array elements', 'Create variables', 'Handle errors', 'Define classes', 'a', 1]
+              ];
+              
+              const stmt = db.prepare('INSERT INTO questions (exam_id, question_text, option_a, option_b, option_c, option_d, correct_answer, marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+              questions.forEach(q => {
+                stmt.run([examId, q[0], q[1], q[2], q[3], q[4], q[5], q[6]]);
+              });
+              stmt.finalize(() => {
+                console.log('✅ Sample exam and questions created');
+              });
+            }
+          );
+        }
+      );
+    }
+  });
 });
 
 // Middleware
