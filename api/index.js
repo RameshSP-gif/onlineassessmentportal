@@ -9,133 +9,173 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Database setup
-const dbPath = path.join(__dirname, '..', 'assessment.db');
-const db = new sqlite3.Database(dbPath, (err) => {
+// Use in-memory database for Vercel serverless
+const db = new sqlite3.Database(':memory:', (err) => {
   if (err) {
     console.error('❌ Error connecting to database:', err.message);
   } else {
-    console.log('✅ Connected to SQLite database at:', dbPath);
+    console.log('✅ Connected to in-memory SQLite database');
   }
 });
 
-// Initialize database tables
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    role TEXT DEFAULT 'student',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
+// Database initialization flag
+let dbInitialized = false;
 
-  db.run(`CREATE TABLE IF NOT EXISTS exams (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    description TEXT,
-    duration INTEGER NOT NULL,
-    total_marks INTEGER NOT NULL,
-    created_by INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (created_by) REFERENCES users(id)
-  )`);
+// Initialize database with tables and data
+function initializeDatabase() {
+  return new Promise((resolve, reject) => {
+    if (dbInitialized) {
+      resolve();
+      return;
+    }
 
-  db.run(`CREATE TABLE IF NOT EXISTS questions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    exam_id INTEGER NOT NULL,
-    question_text TEXT NOT NULL,
-    option_a TEXT NOT NULL,
-    option_b TEXT NOT NULL,
-    option_c TEXT NOT NULL,
-    option_d TEXT NOT NULL,
-    correct_answer TEXT NOT NULL,
-    marks INTEGER DEFAULT 1,
-    FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
-  )`);
+    db.serialize(() => {
+      // Create tables
+      db.run(`CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT DEFAULT 'student',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`);
 
-  db.run(`CREATE TABLE IF NOT EXISTS submissions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    exam_id INTEGER NOT NULL,
-    answers TEXT NOT NULL,
-    score INTEGER,
-    submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (exam_id) REFERENCES exams(id)
-  )`);
+      db.run(`CREATE TABLE IF NOT EXISTS exams (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        duration INTEGER NOT NULL,
+        total_marks INTEGER NOT NULL,
+        created_by INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (created_by) REFERENCES users(id)
+      )`);
 
-  db.run(`CREATE TABLE IF NOT EXISTS video_interviews (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    question TEXT NOT NULL,
-    video_url TEXT,
-    ai_analysis TEXT,
-    score INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  )`);
+      db.run(`CREATE TABLE IF NOT EXISTS questions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        exam_id INTEGER NOT NULL,
+        question_text TEXT NOT NULL,
+        option_a TEXT NOT NULL,
+        option_b TEXT NOT NULL,
+        option_c TEXT NOT NULL,
+        option_d TEXT NOT NULL,
+        correct_answer TEXT NOT NULL,
+        marks INTEGER DEFAULT 1,
+        FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE
+      )`);
 
-  // Auto-seed database if empty (for Vercel serverless environment)
-  db.get('SELECT COUNT(*) as count FROM users', async (err, result) => {
-    if (!err && result.count === 0) {
-      console.log('🌱 Database is empty. Auto-seeding...');
-      
-      // Create admin user
-      const hashedPassword = await bcrypt.hash('admin123', 10);
-      db.run('INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
-        ['admin', 'admin@assessment.com', hashedPassword, 'admin'],
-        function(err) {
-          if (err) {
-            console.error('❌ Error creating admin:', err);
-            return;
-          }
-          console.log('✅ Admin user created');
+      db.run(`CREATE TABLE IF NOT EXISTS submissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        exam_id INTEGER NOT NULL,
+        answers TEXT NOT NULL,
+        score INTEGER,
+        submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (exam_id) REFERENCES exams(id)
+      )`);
+
+      db.run(`CREATE TABLE IF NOT EXISTS video_interviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        question TEXT NOT NULL,
+        video_url TEXT,
+        ai_analysis TEXT,
+        score INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )`, async (err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        // Seed data
+        try {
+          const hashedPassword = await bcrypt.hash('admin123', 10);
           
-          // Create sample exam
-          db.run('INSERT INTO exams (title, description, duration, total_marks, created_by) VALUES (?, ?, ?, ?, ?)',
-            ['JavaScript Basics', 'Test your JavaScript knowledge', 30, 10, this.lastID],
+          db.run('INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
+            ['admin', 'admin@assessment.com', hashedPassword, 'admin'],
             function(err) {
               if (err) {
-                console.error('❌ Error creating exam:', err);
+                console.error('❌ Error creating admin:', err);
+                reject(err);
                 return;
               }
-              const examId = this.lastID;
               
-              // Add sample questions
-              const questions = [
-                ['What is JavaScript?', 'A programming language', 'A database', 'An operating system', 'A web browser', 'a', 1],
-                ['What does DOM stand for?', 'Document Object Model', 'Data Object Manager', 'Digital Operations Module', 'Dynamic Output Method', 'a', 1],
-                ['Which keyword is used to declare a variable?', 'var, let, const', 'variable', 'string', 'int', 'a', 1],
-                ['What is the result of typeof null?', 'object', 'null', 'undefined', 'boolean', 'a', 1],
-                ['What does === mean in JavaScript?', 'Strict equality comparison', 'Assignment', 'Greater than', 'Less than', 'a', 1],
-                ['What is a closure in JavaScript?', 'A function with access to outer scope', 'A loop', 'A data type', 'An error handler', 'a', 1],
-                ['What is the purpose of async/await?', 'Handle asynchronous operations', 'Create loops', 'Declare variables', 'Define classes', 'a', 1],
-                ['What is JSON?', 'JavaScript Object Notation', 'Java Secure Object Network', 'JavaScript Output Node', 'Java Standard Object Name', 'a', 1],
-                ['What is an arrow function?', 'A shorter syntax for functions', 'A loop statement', 'A data type', 'A variable declaration', 'a', 1],
-                ['What is the purpose of map()?', 'Transform array elements', 'Create variables', 'Handle errors', 'Define classes', 'a', 1]
-              ];
-              
-              const stmt = db.prepare('INSERT INTO questions (exam_id, question_text, option_a, option_b, option_c, option_d, correct_answer, marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-              questions.forEach(q => {
-                stmt.run([examId, q[0], q[1], q[2], q[3], q[4], q[5], q[6]]);
-              });
-              stmt.finalize(() => {
-                console.log('✅ Sample exam and questions created');
-              });
+              // Create sample exam
+              db.run('INSERT INTO exams (title, description, duration, total_marks, created_by) VALUES (?, ?, ?, ?, ?)',
+                ['JavaScript Basics', 'Test your JavaScript knowledge', 30, 10, 1],
+                function(err) {
+                  if (err) {
+                    console.error('❌ Error creating exam:', err);
+                    reject(err);
+                    return;
+                  }
+                  const examId = this.lastID;
+                  
+                  // Add sample questions
+                  const questions = [
+                    ['What is JavaScript?', 'A programming language', 'A database', 'An operating system', 'A web browser', 'a', 1],
+                    ['What does DOM stand for?', 'Document Object Model', 'Data Object Manager', 'Digital Operations Module', 'Dynamic Output Method', 'a', 1],
+                    ['Which keyword is used to declare a variable?', 'var, let, const', 'variable', 'string', 'int', 'a', 1],
+                    ['What is the result of typeof null?', 'object', 'null', 'undefined', 'boolean', 'a', 1],
+                    ['What does === mean in JavaScript?', 'Strict equality comparison', 'Assignment', 'Greater than', 'Less than', 'a', 1],
+                    ['What is a closure in JavaScript?', 'A function with access to outer scope', 'A loop', 'A data type', 'An error handler', 'a', 1],
+                    ['What is the purpose of async/await?', 'Handle asynchronous operations', 'Create loops', 'Declare variables', 'Define classes', 'a', 1],
+                    ['What is JSON?', 'JavaScript Object Notation', 'Java Secure Object Network', 'JavaScript Output Node', 'Java Standard Object Name', 'a', 1],
+                    ['What is an arrow function?', 'A shorter syntax for functions', 'A loop statement', 'A data type', 'A variable declaration', 'a', 1],
+                    ['What is the purpose of map()?', 'Transform array elements', 'Create variables', 'Handle errors', 'Define classes', 'a', 1]
+                  ];
+                  
+                  const stmt = db.prepare('INSERT INTO questions (exam_id, question_text, option_a, option_b, option_c, option_d, correct_answer, marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+                  questions.forEach(q => {
+                    stmt.run([examId, q[0], q[1], q[2], q[3], q[4], q[5], q[6]]);
+                  });
+                  stmt.finalize((err) => {
+                    if (err) {
+                      console.error('❌ Error finalizing questions:', err);
+                      reject(err);
+                    } else {
+                      console.log('✅ Database initialized with sample data');
+                      dbInitialized = true;
+                      resolve();
+                    }
+                  });
+                }
+              );
             }
           );
+        } catch (error) {
+          console.error('❌ Error during seeding:', error);
+          reject(error);
         }
-      );
-    }
+      });
+    });
   });
+}
+
+// Initialize database immediately
+initializeDatabase().catch(err => {
+  console.error('Failed to initialize database:', err);
 });
+
+// Middleware to ensure DB is ready
+const ensureDbReady = async (req, res, next) => {
+  try {
+    await initializeDatabase();
+    next();
+  } catch (error) {
+    res.status(500).json({ error: 'Database initialization failed' });
+  }
+};
 
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(ensureDbReady);
 
 // Auth middleware
 const auth = (req, res, next) => {
