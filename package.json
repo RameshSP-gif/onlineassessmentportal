@@ -9,7 +9,8 @@
     "eject": "react-scripts eject",
     "server": "node api/index.js",
     "dev": "concurrently \"npm start\" \"nodemon api/index.js\"",
-    "seed": "node api/seed.js"
+    "seed": "node api/seed.js",
+    "vercel-build": "npm run build"
   },
   "dependencies": {
     "react": "^18.2.0",
