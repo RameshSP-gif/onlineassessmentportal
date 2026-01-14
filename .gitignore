@@ -8,3 +8,5 @@ build/
 .idea/
 dist/
 coverage/
+.vercel
+.env*.local
