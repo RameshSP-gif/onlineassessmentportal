@@ -22,6 +22,11 @@ import ReportsPage from './components/ReportsPage';
 import NotificationsPage from './components/NotificationsPage';
 import SubmissionsView from './components/SubmissionsView';
 import AdminPaymentVerification from './components/AdminPaymentVerification';
+import InterviewerRegister from './components/InterviewerRegister';
+import InterviewerLogin from './components/InterviewerLogin';
+import InterviewerDashboard from './components/InterviewerDashboard';
+import InterviewerVideoInterview from './components/InterviewerVideoInterview';
+import InterviewReview from './components/InterviewReview';
 
 function App() {
   const isAuthenticated = () => {
@@ -51,6 +56,13 @@ function App() {
         <Route path="/interview-status" element={<ProtectedRoute><InterviewStatus /></ProtectedRoute>} />
         <Route path="/interview-payment/:courseId" element={<ProtectedRoute><InterviewPayment /></ProtectedRoute>} />
         <Route path="/take-interview/:courseId" element={<ProtectedRoute><TakeInterview /></ProtectedRoute>} />
+        
+        {/* Interviewer Routes */}
+        <Route path="/interviewer/register" element={<InterviewerRegister />} />
+        <Route path="/interviewer/login" element={<InterviewerLogin />} />
+        <Route path="/interviewer/dashboard" element={<ProtectedRoute><InterviewerDashboard /></ProtectedRoute>} />
+        <Route path="/interviewer/interview/:sessionId" element={<ProtectedRoute><InterviewerVideoInterview /></ProtectedRoute>} />
+        <Route path="/interviewer/review/:sessionId" element={<ProtectedRoute><InterviewReview /></ProtectedRoute>} />
         
         {/* Admin Routes */}
         <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />

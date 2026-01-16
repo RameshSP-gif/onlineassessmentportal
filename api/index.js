@@ -49,6 +49,54 @@ let db = null;
 let isConnecting = false;
 let connectionPromise = null;
 
+// MongoDB Schema Models for Interviewers
+const InterviewerSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  fullName: { type: String, required: true },
+  specialization: { type: String }, // e.g., "Java", "Python", "MERN"
+  experience: { type: Number }, // years of experience
+  bio: { type: String },
+  rating: { type: Number, default: 0 },
+  totalInterviews: { type: Number, default: 0 },
+  role: { type: String, default: 'interviewer' },
+  created_at: { type: Date, default: Date.now }
+});
+
+const InterviewSessionSchema = new mongoose.Schema({
+  studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  interviewerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Interviewer', required: true },
+  interviewId: { type: mongoose.Schema.Types.ObjectId, required: true },
+  scheduledAt: { type: Date, required: true },
+  startedAt: { type: Date },
+  endedAt: { type: Date },
+  status: { 
+    type: String, 
+    enum: ['scheduled', 'in-progress', 'completed', 'cancelled'],
+    default: 'scheduled' 
+  },
+  videoRecordingUrl: { type: String },
+  recordingChunks: [{ type: String }], // Array of video chunk URLs
+  transcript: { type: String },
+  aiEvaluation: {
+    technicalScore: { type: Number },
+    communicationScore: { type: Number },
+    problemSolvingScore: { type: Number },
+    overallScore: { type: Number },
+    strengths: [{ type: String }],
+    weaknesses: [{ type: String }],
+    feedback: { type: String },
+    recommendation: { type: String }
+  },
+  interviewerFeedback: { type: String },
+  duration: { type: Number }, // in minutes
+  created_at: { type: Date, default: Date.now }
+});
+
+const Interviewer = mongoose.model('Interviewer', InterviewerSchema);
+const InterviewSession = mongoose.model('InterviewSession', InterviewSessionSchema);
+
 async function connectDB() {
   // Return existing connection
   if (db && mongoose.connection.readyState === 1) {
@@ -401,6 +449,347 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// INTERVIEWER AUTH & MANAGEMENT
+app.post('/api/interviewer/register', async (req, res) => {
+  try {
+    await connectDB();
+    const { username, email, password, fullName, specialization, experience, bio } = req.body;
+    
+    const existing = await Interviewer.findOne({ $or: [{ email }, { username }] });
+    if (existing) return res.status(400).json({ error: 'Interviewer already exists' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const interviewer = new Interviewer({
+      username,
+      email,
+      password: hashedPassword,
+      fullName,
+      specialization,
+      experience,
+      bio
+    });
+    
+    await interviewer.save();
+    
+    const token = jwt.sign(
+      { id: interviewer._id.toString(), username, role: 'interviewer' },
+      process.env.JWT_SECRET || 'secret_key_123',
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({
+      message: 'Interviewer registered successfully',
+      token,
+      interviewer: {
+        id: interviewer._id.toString(),
+        username: interviewer.username,
+        email: interviewer.email,
+        fullName: interviewer.fullName,
+        role: 'interviewer'
+      }
+    });
+  } catch (error) {
+    console.error('Interviewer register error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/interviewer/login', async (req, res) => {
+  try {
+    await connectDB();
+    const { email, password } = req.body;
+    
+    const interviewer = await Interviewer.findOne({ email });
+    if (!interviewer) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const isValid = await bcrypt.compare(password, interviewer.password);
+    if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const token = jwt.sign(
+      { id: interviewer._id.toString(), username: interviewer.username, role: 'interviewer' },
+      process.env.JWT_SECRET || 'secret_key_123',
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      message: 'Login successful',
+      token,
+      interviewer: {
+        id: interviewer._id.toString(),
+        username: interviewer.username,
+        email: interviewer.email,
+        fullName: interviewer.fullName,
+        role: 'interviewer',
+        specialization: interviewer.specialization,
+        rating: interviewer.rating,
+        totalInterviews: interviewer.totalInterviews
+      }
+    });
+  } catch (error) {
+    console.error('Interviewer login error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get interviewer's assigned interviews
+app.get('/api/interviewer/:id/interviews', async (req, res) => {
+  try {
+    await connectDB();
+    const sessions = await InterviewSession.find({ interviewerId: req.params.id })
+      .populate('studentId', 'username email')
+      .sort({ scheduledAt: -1 });
+    
+    res.json(sessions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update interview session status
+app.patch('/api/interview-session/:id/status', async (req, res) => {
+  try {
+    await connectDB();
+    const { status, startedAt, endedAt } = req.body;
+    
+    const updateData = { status };
+    if (startedAt) updateData.startedAt = new Date(startedAt);
+    if (endedAt) updateData.endedAt = new Date(endedAt);
+    
+    const session = await InterviewSession.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData },
+      { new: true }
+    );
+    
+    res.json(session);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save video recording chunks
+app.post('/api/interview-session/:id/recording', async (req, res) => {
+  try {
+    await connectDB();
+    const { chunkUrl } = req.body;
+    
+    const session = await InterviewSession.findByIdAndUpdate(
+      req.params.id,
+      { $push: { recordingChunks: chunkUrl } },
+      { new: true }
+    );
+    
+    res.json(session);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Finalize recording with full URL
+app.patch('/api/interview-session/:id/recording-complete', async (req, res) => {
+  try {
+    await connectDB();
+    const { videoRecordingUrl } = req.body;
+    
+    const session = await InterviewSession.findByIdAndUpdate(
+      req.params.id,
+      { $set: { videoRecordingUrl } },
+      { new: true }
+    );
+    
+    res.json(session);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save transcript
+app.post('/api/interview-session/:id/transcript', async (req, res) => {
+  try {
+    await connectDB();
+    const { transcript } = req.body;
+    
+    const session = await InterviewSession.findByIdAndUpdate(
+      req.params.id,
+      { $set: { transcript } },
+      { new: true }
+    );
+    
+    // Trigger AI evaluation after transcript is saved
+    // This will be called automatically
+    
+    res.json(session);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate AI evaluation and feedback
+app.post('/api/interview-session/:id/evaluate', async (req, res) => {
+  try {
+    await connectDB();
+    const session = await InterviewSession.findById(req.params.id);
+    
+    if (!session || !session.transcript) {
+      return res.status(400).json({ error: 'Transcript not available for evaluation' });
+    }
+    
+    // AI Evaluation using simple keyword and sentiment analysis
+    // In production, this would use advanced LLM like GPT-4, Claude, or custom trained models
+    const transcript = session.transcript.toLowerCase();
+    
+    // Technical score based on technical keywords
+    const technicalKeywords = [
+      'algorithm', 'data structure', 'complexity', 'optimization', 'design pattern',
+      'api', 'database', 'scalability', 'performance', 'architecture',
+      'object-oriented', 'functional', 'async', 'synchronous', 'framework'
+    ];
+    const technicalScore = Math.min(100, technicalKeywords.filter(k => transcript.includes(k)).length * 7 + 40);
+    
+    // Communication score based on clarity indicators
+    const communicationKeywords = [
+      'because', 'therefore', 'however', 'for example', 'in other words',
+      'specifically', 'essentially', 'basically', 'actually'
+    ];
+    const communicationScore = Math.min(100, communicationKeywords.filter(k => transcript.includes(k)).length * 10 + 50);
+    
+    // Problem-solving score based on approach keywords
+    const problemSolvingKeywords = [
+      'first', 'then', 'next', 'finally', 'approach', 'solution', 'strategy',
+      'consider', 'analyze', 'implement', 'test', 'edge case'
+    ];
+    const problemSolvingScore = Math.min(100, problemSolvingKeywords.filter(k => transcript.includes(k)).length * 8 + 45);
+    
+    const overallScore = Math.round((technicalScore + communicationScore + problemSolvingScore) / 3);
+    
+    // Generate strengths and weaknesses
+    const strengths = [];
+    const weaknesses = [];
+    
+    if (technicalScore >= 70) {
+      strengths.push('Strong technical knowledge and terminology');
+    } else {
+      weaknesses.push('Could improve technical vocabulary and concepts understanding');
+    }
+    
+    if (communicationScore >= 70) {
+      strengths.push('Clear and articulate communication style');
+    } else {
+      weaknesses.push('Communication could be more structured and clear');
+    }
+    
+    if (problemSolvingScore >= 70) {
+      strengths.push('Systematic problem-solving approach');
+    } else {
+      weaknesses.push('Problem-solving approach needs more structure');
+    }
+    
+    // Generate detailed feedback
+    const feedback = `
+Based on the interview analysis:
+
+Technical Performance (${technicalScore}/100): ${technicalScore >= 70 ? 'Excellent' : technicalScore >= 50 ? 'Good' : 'Needs Improvement'}
+- Demonstrated understanding of key technical concepts
+- ${technicalScore >= 70 ? 'Strong grasp of industry terminology' : 'Should deepen technical knowledge'}
+
+Communication Skills (${communicationScore}/100): ${communicationScore >= 70 ? 'Excellent' : communicationScore >= 50 ? 'Good' : 'Needs Improvement'}
+- ${communicationScore >= 70 ? 'Articulates thoughts clearly and effectively' : 'Could improve clarity and structure in responses'}
+
+Problem Solving (${problemSolvingScore}/100): ${problemSolvingScore >= 70 ? 'Excellent' : problemSolvingScore >= 50 ? 'Good' : 'Needs Improvement'}
+- ${problemSolvingScore >= 70 ? 'Shows systematic approach to problem-solving' : 'Would benefit from more structured problem-solving methodology'}
+    `.trim();
+    
+    const recommendation = overallScore >= 75 ? 'Strong candidate - Highly recommended for next round' :
+                          overallScore >= 60 ? 'Good candidate - Recommended with some reservations' :
+                          overallScore >= 45 ? 'Average candidate - Requires further evaluation' :
+                          'Below expectations - Not recommended at this time';
+    
+    const aiEvaluation = {
+      technicalScore,
+      communicationScore,
+      problemSolvingScore,
+      overallScore,
+      strengths,
+      weaknesses,
+      feedback,
+      recommendation
+    };
+    
+    session.aiEvaluation = aiEvaluation;
+    await session.save();
+    
+    res.json({ aiEvaluation });
+  } catch (error) {
+    console.error('AI evaluation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get interview session details with playback
+app.get('/api/interview-session/:id', async (req, res) => {
+  try {
+    await connectDB();
+    const session = await InterviewSession.findById(req.params.id)
+      .populate('studentId', 'username email')
+      .populate('interviewerId', 'username fullName specialization');
+    
+    res.json(session);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add interviewer feedback
+app.post('/api/interview-session/:id/feedback', async (req, res) => {
+  try {
+    await connectDB();
+    const { interviewerFeedback } = req.body;
+    
+    const session = await InterviewSession.findByIdAndUpdate(
+      req.params.id,
+      { $set: { interviewerFeedback } },
+      { new: true }
+    );
+    
+    res.json(session);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Assign interview to interviewer (admin endpoint)
+app.post('/api/admin/assign-interview', async (req, res) => {
+  try {
+    await connectDB();
+    const { studentId, interviewerId, interviewId, scheduledAt } = req.body;
+    
+    const session = new InterviewSession({
+      studentId,
+      interviewerId,
+      interviewId,
+      scheduledAt: new Date(scheduledAt),
+      status: 'scheduled'
+    });
+    
+    await session.save();
+    
+    res.status(201).json(session);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all interviewers (admin endpoint)
+app.get('/api/admin/interviewers', async (req, res) => {
+  try {
+    await connectDB();
+    const interviewers = await Interviewer.find({}).select('-password');
+    res.json(interviewers);
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
