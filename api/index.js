@@ -46,44 +46,78 @@ const PORT = process.env.PORT || 5001;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://root:Rakshita%401234@cluster0.pp8rwbt.mongodb.net/assessmentdb?retryWrites=true&w=majority';
 
 let db = null;
+let isConnecting = false;
+let connectionPromise = null;
 
 async function connectDB() {
-  if (db) return db;
-  
-  try {
-    console.log('🔄 Connecting to MongoDB Atlas...');
-    console.log('📍 Cluster: cluster0.pp8rwbt.mongodb.net');
-    
-    await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 20000,
-      socketTimeoutMS: 45000,
-    });
-    
-    db = mongoose.connection.db;
-    console.log('✅ MongoDB Atlas Connected Successfully!');
-    
-    // Seed if empty (only in development or first run)
-    if (process.env.NODE_ENV !== 'production') {
-      const count = await db.collection('exams').countDocuments();
-      console.log(`📊 Found ${count} exams in database`);
-      if (count === 0) {
-        console.log('🌱 Seeding database...');
-        await seedDatabase();
-      }
-    }
-    
+  // Return existing connection
+  if (db && mongoose.connection.readyState === 1) {
     return db;
-  } catch (error) {
-    console.error('\n❌ MongoDB Atlas Connection FAILED!\n');
-    console.error('Error:', error.message);
-    console.error('\n🔧 SOLUTION - Whitelist your IP in MongoDB Atlas:');
-    console.error('1. Go to: https://cloud.mongodb.com');
-    console.error('2. Click: Network Access (left sidebar)');
-    console.error('3. Click: Add IP Address');
-    console.error('4. Select: Allow Access from Anywhere (0.0.0.0/0)');
-    console.error('5. Click: Confirm\n');
-    throw error;
   }
+  
+  // Wait for ongoing connection attempt
+  if (isConnecting && connectionPromise) {
+    return connectionPromise;
+  }
+  
+  // Start new connection
+  isConnecting = true;
+  connectionPromise = (async () => {
+    try {
+      console.log('🔄 Connecting to MongoDB Atlas...');
+      console.log('📍 Cluster: cluster0.pp8rwbt.mongodb.net');
+      
+      if (mongoose.connection.readyState === 0) {
+        await mongoose.connect(MONGODB_URI, {
+          serverSelectionTimeoutMS: 30000,
+          socketTimeoutMS: 45000,
+          maxPoolSize: 10,
+          minPoolSize: 2,
+        });
+      }
+      
+      db = mongoose.connection.db;
+      
+      if (!db) {
+        throw new Error('Database connection failed - db is null');
+      }
+      
+      console.log('✅ MongoDB Atlas Connected Successfully!');
+      
+      // Seed if empty (only in development or first run)
+      if (process.env.NODE_ENV !== 'production') {
+        try {
+          const count = await db.collection('exams').countDocuments();
+          console.log(`📊 Found ${count} exams in database`);
+          if (count === 0) {
+            console.log('🌱 Seeding database...');
+            await seedDatabase();
+          }
+        } catch (seedError) {
+          console.error('Seed check error:', seedError.message);
+        }
+      }
+      
+      isConnecting = false;
+      return db;
+    } catch (error) {
+      isConnecting = false;
+      connectionPromise = null;
+      db = null;
+      
+      console.error('\n❌ MongoDB Atlas Connection FAILED!\n');
+      console.error('Error:', error.message);
+      console.error('\n🔧 SOLUTION - Whitelist your IP in MongoDB Atlas:');
+      console.error('1. Go to: https://cloud.mongodb.com');
+      console.error('2. Click: Network Access (left sidebar)');
+      console.error('3. Click: Add IP Address');
+      console.error('4. Select: Allow Access from Anywhere (0.0.0.0/0)');
+      console.error('5. Click: Confirm\n');
+      throw error;
+    }
+  })();
+  
+  return connectionPromise;
 }
 
 async function seedDatabase() {
