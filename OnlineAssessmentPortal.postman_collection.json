@@ -1,0 +1,541 @@
+{
+	"info": {
+		"_postman_id": "online-assessment-portal-2026",
+		"name": "Online Assessment Portal",
+		"description": "Complete API collection for Online Assessment Portal with MCQ exams and video interviews",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"token\", jsonData.token);",
+									"    pm.environment.set(\"user_id\", jsonData.user.id);",
+									"    pm.environment.set(\"username\", jsonData.user.username);",
+									"    console.log(\"Token saved: \" + jsonData.token);",
+									"    console.log(\"User ID saved: \" + jsonData.user.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"testuser\",\n  \"email\": \"test@example.com\",\n  \"password\": \"pass123\",\n  \"role\": \"student\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"register"
+							]
+						},
+						"description": "Register a new user account"
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"token\", jsonData.token);",
+									"    pm.environment.set(\"user_id\", jsonData.user.id);",
+									"    console.log(\"Login successful!\");",
+									"    console.log(\"Token: \" + jsonData.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"testuser\",\n  \"password\": \"pass123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Login with existing credentials"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Exams",
+			"item": [
+				{
+					"name": "Get All Exams",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.length > 0) {",
+									"        pm.environment.set(\"exam_id\", jsonData[0].id);",
+									"        console.log(\"Exam ID saved: \" + jsonData[0].id);",
+									"        console.log(\"Total exams: \" + jsonData.length);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/exams",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"exams"
+							]
+						},
+						"description": "Get list of all available exams"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Exam By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/exams/{{exam_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"exams",
+								"{{exam_id}}"
+							]
+						},
+						"description": "Get exam details including all questions and options"
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Exam",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"Score: \" + jsonData.score + \" / \" + jsonData.totalMarks);",
+									"    console.log(\"Percentage: \" + jsonData.percentage + \"%\");",
+									"    console.log(\"Passed: \" + jsonData.passed);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"answers\": {\n    \"1\": \"a\",\n    \"2\": \"a\",\n    \"3\": \"a\",\n    \"4\": \"a\",\n    \"5\": \"a\",\n    \"6\": \"a\",\n    \"7\": \"a\",\n    \"8\": \"a\",\n    \"9\": \"a\",\n    \"10\": \"a\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/exams/{{exam_id}}/submit",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"exams",
+								"{{exam_id}}",
+								"submit"
+							]
+						},
+						"description": "Submit exam answers and get score"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Submissions",
+			"item": [
+				{
+					"name": "Create Submission",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"submission_id\", jsonData.submission._id);",
+									"    console.log(\"Submission created: \" + jsonData.submission._id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"examId\": \"{{exam_id}}\",\n  \"userId\": \"{{user_id}}\",\n  \"answers\": {\n    \"1\": \"a\",\n    \"2\": \"a\",\n    \"3\": \"a\"\n  },\n  \"score\": 3,\n  \"totalMarks\": 10\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/submissions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"submissions"
+							]
+						},
+						"description": "Create a new submission record"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Submissions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/submissions/user/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"submissions",
+								"user",
+								"{{user_id}}"
+							]
+						},
+						"description": "Get all submissions for a specific user"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Interviews",
+			"item": [
+				{
+					"name": "Create Interview",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"interview_id\", jsonData.interview._id);",
+									"    console.log(\"Interview created: \" + jsonData.interview._id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"position\": \"Software Engineer\",\n  \"questions\": [\n    \"Tell me about yourself\",\n    \"What are your strengths?\",\n    \"Why do you want this job?\"\n  ],\n  \"responses\": [\n    \"I am a developer with 3 years experience\",\n    \"Problem solving and team work\",\n    \"I love coding and challenges\"\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/interviews",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"interviews"
+							]
+						},
+						"description": "Create a new video interview record"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Interviews",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/interviews/user/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"interviews",
+								"user",
+								"{{user_id}}"
+							]
+						},
+						"description": "Get all interviews for a specific user"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Payments",
+			"item": [
+				{
+					"name": "Create Payment Order",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"order_id\", jsonData.orderId);",
+									"    pm.environment.set(\"payment_id\", jsonData.paymentId);",
+									"    console.log(\"Order created: \" + jsonData.orderId);",
+									"    console.log(\"Amount: ₹\" + jsonData.amount);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"examId\": \"{{exam_id}}\",\n  \"userId\": \"{{user_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/payments/create-order",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"payments",
+								"create-order"
+							]
+						},
+						"description": "Create a payment order for exam (₹200)"
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Payment",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"Payment verified: \" + jsonData.success);",
+									"    console.log(jsonData.message);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"orderId\": \"{{order_id}}\",\n  \"paymentId\": \"pay_test123456789\",\n  \"signature\": \"sig_test123456789\",\n  \"examId\": \"{{exam_id}}\",\n  \"userId\": \"{{user_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/payments/verify",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"payments",
+								"verify"
+							]
+						},
+						"description": "Verify payment completion with transaction details"
+					},
+					"response": []
+				},
+				{
+					"name": "Check Payment Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"Payment status: \" + (jsonData.paid ? \"PAID ✓\" : \"NOT PAID ✗\"));",
+									"    if (jsonData.payment) {",
+									"        console.log(\"Payment ID: \" + jsonData.payment.id);",
+									"        console.log(\"Amount: ₹\" + jsonData.payment.amount);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/payments/status/{{exam_id}}/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"payments",
+								"status",
+								"{{exam_id}}",
+								"{{user_id}}"
+							]
+						},
+						"description": "Check if user has paid for a specific exam"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5001",
+			"type": "string"
+		}
+	]
+}

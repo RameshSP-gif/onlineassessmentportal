@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { interviews } from '../api';
+import Layout from './Layout';
 import './VideoInterview.css';
 
 function VideoInterview() {
@@ -122,16 +123,11 @@ function VideoInterview() {
   };
 
   if (questions.length === 0) {
-    return <div className="loading">Loading interview questions...</div>;
+    return <Layout><div className="loading">Loading interview questions...</div></Layout>;
   }
 
   return (
-    <div className="dashboard-container">
-      <nav className="navbar">
-        <h2>Video Interview</h2>
-        <button onClick={() => navigate('/dashboard')} className="btn btn-secondary">Back to Dashboard</button>
-      </nav>
-
+    <Layout>
       <div className="container">
         <div className="card">
           <div className="interview-header">
@@ -290,7 +286,7 @@ function VideoInterview() {
           )}
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }
 

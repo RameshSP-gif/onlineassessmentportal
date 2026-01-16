@@ -18,7 +18,13 @@ function Login() {
       const response = await auth.login(formData);
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
-      navigate('/dashboard');
+      
+      // Redirect admin to admin dashboard
+      if (response.data.user.role === 'admin') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
     } finally {
@@ -33,6 +39,18 @@ function Login() {
         <p className="text-center" style={{ color: '#718096', marginBottom: '30px' }}>
           Welcome back to Assessment Portal
         </p>
+
+        <div style={{
+          backgroundColor: '#ebf4ff',
+          border: '1px solid #bee3f8',
+          borderRadius: '8px',
+          padding: '12px',
+          marginBottom: '20px',
+          fontSize: '13px',
+          color: '#2c5282'
+        }}>
+          <strong>💡 Testing Tip:</strong> To login as Admin & Student simultaneously, use different browsers (Chrome, Firefox) or open an Incognito/Private window.
+        </div>
 
         {error && <div className="error">{error}</div>}
 

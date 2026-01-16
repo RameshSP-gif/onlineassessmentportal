@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { submissions, interviews } from '../api';
+import Layout from './Layout';
 
 function Results() {
   const [examResults, setExamResults] = useState([]);
@@ -37,12 +38,7 @@ function Results() {
   }
 
   return (
-    <div className="dashboard-container">
-      <nav className="navbar">
-        <h2>Assessment Portal</h2>
-        <button onClick={() => navigate('/dashboard')} className="btn btn-secondary">Back to Dashboard</button>
-      </nav>
-
+    <Layout>
       <div className="container">
         <div className="card">
           <h1>My Results</h1>
@@ -215,7 +211,7 @@ function Results() {
           color: #2d3748;
         }
       `}</style>
-    </div>
+    </Layout>
   );
 }
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { exams } from '../api';
+import Layout from './Layout';
 import './CreateExam.css';
 
 function CreateExam() {
@@ -79,12 +80,7 @@ function CreateExam() {
   };
 
   return (
-    <div className="dashboard-container">
-      <nav className="navbar">
-        <h2>Create New Exam</h2>
-        <button onClick={() => navigate('/admin')} className="btn btn-secondary">Back to Admin</button>
-      </nav>
-
+    <Layout>
       <div className="container">
         <div className="card">
           <form onSubmit={handleSubmit}>
@@ -241,7 +237,7 @@ function CreateExam() {
           </form>
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }
 

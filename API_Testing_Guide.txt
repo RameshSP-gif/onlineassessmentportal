@@ -1,0 +1,406 @@
+===============================================
+ONLINE ASSESSMENT PORTAL - API TESTING GUIDE
+===============================================
+
+Base URL: http://localhost:5001
+Production: https://onlineassessmentportal.vercel.app
+
+===============================================
+1. REGISTER USER
+===============================================
+Method: POST
+URL: http://localhost:5001/api/auth/register
+
+Headers:
+Content-Type: application/json
+
+Body (JSON):
+{
+  "username": "testuser",
+  "email": "test@example.com",
+  "password": "pass123",
+  "role": "student"
+}
+
+Response:
+{
+  "message": "Registration successful",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "696733ac8389915f357af0af",
+    "username": "testuser",
+    "email": "test@example.com",
+    "role": "student"
+  }
+}
+
+===============================================
+2. LOGIN
+===============================================
+Method: POST
+URL: http://localhost:5001/api/auth/login
+
+Headers:
+Content-Type: application/json
+
+Body (JSON):
+{
+  "username": "testuser",
+  "password": "pass123"
+}
+
+Response:
+{
+  "message": "Login successful",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "696733ac8389915f357af0af",
+    "username": "testuser",
+    "email": "test@example.com",
+    "role": "student"
+  }
+}
+
+===============================================
+3. GET ALL EXAMS
+===============================================
+Method: GET
+URL: http://localhost:5001/api/exams
+
+Headers:
+Content-Type: application/json
+
+Response:
+[
+  {
+    "id": "696733ac8389915f357af0af",
+    "_id": "696733ac8389915f357af0af",
+    "title": "JavaScript Basics",
+    "description": "Test your JavaScript knowledge",
+    "duration": 30,
+    "total_marks": 10
+  }
+]
+
+===============================================
+4. GET EXAM BY ID (with questions)
+===============================================
+Method: GET
+URL: http://localhost:5001/api/exams/{examId}
+Example: http://localhost:5001/api/exams/696733ac8389915f357af0af
+
+NOTE: Replace {examId} with actual exam ID from step 3
+
+Headers:
+Content-Type: application/json
+
+Response:
+{
+  "id": "696733ac8389915f357af0af",
+  "title": "JavaScript Basics",
+  "description": "Test your JavaScript knowledge",
+  "duration": 30,
+  "total_marks": 10,
+  "questions": [
+    {
+      "id": 1,
+      "question_text": "What is JavaScript?",
+      "option_a": "A programming language",
+      "option_b": "A database",
+      "option_c": "An operating system",
+      "option_d": "A web browser",
+      "marks": 1
+    },
+    {
+      "id": 2,
+      "question_text": "What does DOM stand for?",
+      "option_a": "Document Object Model",
+      "option_b": "Data Object Manager",
+      "option_c": "Digital Operations Module",
+      "option_d": "Dynamic Output Method",
+      "marks": 1
+    },
+    ... (10 questions total)
+  ]
+}
+
+===============================================
+5. SUBMIT EXAM
+===============================================
+Method: POST
+URL: http://localhost:5001/api/exams/{examId}/submit
+Example: http://localhost:5001/api/exams/696733ac8389915f357af0af/submit
+
+NOTE: Replace {examId} with actual exam ID
+
+Headers:
+Content-Type: application/json
+
+Body (JSON):
+{
+  "answers": {
+    "1": "a",
+    "2": "a",
+    "3": "a",
+    "4": "a",
+    "5": "a",
+    "6": "a",
+    "7": "a",
+    "8": "a",
+    "9": "a",
+    "10": "a"
+  }
+}
+
+NOTE: 
+- Keys are question IDs (1 to 10)
+- Values are answers: "a", "b", "c", or "d"
+
+Response:
+{
+  "score": 10,
+  "totalMarks": 10,
+  "percentage": 100,
+  "passed": true
+}
+
+===============================================
+6. CREATE SUBMISSION
+===============================================
+Method: POST
+URL: http://localhost:5001/api/submissions
+
+Headers:
+Content-Type: application/json
+
+Body (JSON):
+{
+  "examId": "696733ac8389915f357af0af",
+  "userId": "696733ac8389915f357af0b0",
+  "answers": {
+    "1": "a",
+    "2": "a",
+    "3": "a"
+  },
+  "score": 3,
+  "totalMarks": 10
+}
+
+Response:
+{
+  "message": "Submission recorded",
+  "submission": {
+    "_id": "696733ac8389915f357af0b1",
+    "examId": "696733ac8389915f357af0af",
+    "userId": "696733ac8389915f357af0b0",
+    "score": 3,
+    "totalMarks": 10,
+    "percentage": 30,
+    "submitted_at": "2026-01-14T12:30:00.000Z"
+  }
+}
+
+===============================================
+7. GET USER SUBMISSIONS
+===============================================
+Method: GET
+URL: http://localhost:5001/api/submissions/user/{userId}
+Example: http://localhost:5001/api/submissions/user/696733ac8389915f357af0b0
+
+NOTE: Replace {userId} with actual user ID from login/register
+
+Headers:
+Content-Type: application/json
+
+Response:
+[
+  {
+    "_id": "696733ac8389915f357af0b1",
+    "examId": "696733ac8389915f357af0af",
+    "userId": "696733ac8389915f357af0b0",
+    "score": 3,
+    "totalMarks": 10,
+    "percentage": 30,
+    "submitted_at": "2026-01-14T12:30:00.000Z"
+  }
+]
+
+===============================================
+8. CREATE INTERVIEW
+===============================================
+Method: POST
+URL: http://localhost:5001/api/interviews
+
+Headers:
+Content-Type: application/json
+
+Body (JSON):
+{
+  "userId": "696733ac8389915f357af0b0",
+  "position": "Software Engineer",
+  "questions": [
+    "Tell me about yourself",
+    "What are your strengths?",
+    "Why do you want this job?"
+  ],
+  "responses": [
+    "I am a developer with 3 years experience",
+    "Problem solving and team work",
+    "I love coding and challenges"
+  ]
+}
+
+Response:
+{
+  "message": "Interview recorded",
+  "interview": {
+    "_id": "696733ac8389915f357af0b2",
+    "userId": "696733ac8389915f357af0b0",
+    "position": "Software Engineer",
+    "score": 0,
+    "feedback": "Interview completed",
+    "created_at": "2026-01-14T12:30:00.000Z"
+  }
+}
+
+===============================================
+9. GET USER INTERVIEWS
+===============================================
+Method: GET
+URL: http://localhost:5001/api/interviews/user/{userId}
+Example: http://localhost:5001/api/interviews/user/696733ac8389915f357af0b0
+
+NOTE: Replace {userId} with actual user ID
+
+Headers:
+Content-Type: application/json
+
+Response:
+[
+  {
+    "_id": "696733ac8389915f357af0b2",
+    "userId": "696733ac8389915f357af0b0",
+    "position": "Software Engineer",
+    "score": 0,
+    "feedback": "Interview completed",
+    "created_at": "2026-01-14T12:30:00.000Z"
+  }
+]
+
+===============================================
+TESTING WORKFLOW
+===============================================
+
+Step 1: Register User
+  - POST /api/auth/register
+  - Save the returned token and user.id
+
+Step 2: Login (Optional - to verify credentials)
+  - POST /api/auth/login
+  - Verify token is returned
+
+Step 3: Get All Exams
+  - GET /api/exams
+  - Save an exam ID
+
+Step 4: Get Exam Details
+  - GET /api/exams/{examId}
+  - View questions and options
+
+Step 5: Submit Exam
+  - POST /api/exams/{examId}/submit
+  - Submit answers and get score
+
+Step 6: View Submissions
+  - GET /api/submissions/user/{userId}
+  - See exam history
+
+Step 7: Create Interview (Optional)
+  - POST /api/interviews
+  - Record video interview responses
+
+Step 8: View Interviews (Optional)
+  - GET /api/interviews/user/{userId}
+  - See interview history
+
+===============================================
+POSTMAN COLLECTION SETUP
+===============================================
+
+1. Create new collection: "Online Assessment Portal"
+
+2. Add Environment Variables:
+   - base_url: http://localhost:5001
+   - token: (will be set after login)
+   - user_id: (will be set after login)
+   - exam_id: (will be set after getting exams)
+
+3. Add requests as shown above
+
+4. In Tests tab of Register/Login requests, add:
+   pm.environment.set("token", pm.response.json().token);
+   pm.environment.set("user_id", pm.response.json().user.id);
+
+5. In Tests tab of Get Exams request, add:
+   pm.environment.set("exam_id", pm.response.json()[0].id);
+
+===============================================
+CURRENT DATABASE DATA
+===============================================
+
+Admin User:
+  Username: admin
+  Password: admin123
+  Role: admin
+
+Default Exam:
+  Title: JavaScript Basics
+  Questions: 10
+  Duration: 30 minutes
+  Total Marks: 10
+
+All questions have correct answer 'a' for easy testing.
+
+===============================================
+ERROR RESPONSES
+===============================================
+
+400 Bad Request:
+{
+  "error": "User exists"
+}
+
+401 Unauthorized:
+{
+  "error": "Invalid credentials"
+}
+
+404 Not Found:
+{
+  "error": "Not found"
+}
+
+500 Internal Server Error:
+{
+  "error": "Server error message"
+}
+
+===============================================
+NOTES
+===============================================
+
+1. No authentication required for any endpoints (simplified per requirements)
+
+2. All endpoints accept and return JSON
+
+3. MongoDB Atlas is used as database
+
+4. Frontend runs on: http://localhost:3000
+
+5. Backend runs on: http://localhost:5001
+
+6. Deployed version: https://onlineassessmentportal.vercel.app
+
+===============================================
+END OF DOCUMENT
+===============================================
