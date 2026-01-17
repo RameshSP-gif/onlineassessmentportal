@@ -27,6 +27,8 @@ import InterviewerLogin from './components/InterviewerLogin';
 import InterviewerDashboard from './components/InterviewerDashboard';
 import InterviewerVideoInterview from './components/InterviewerVideoInterview';
 import InterviewReview from './components/InterviewReview';
+import RoleManagement from './components/RoleManagement';
+import UserManagement from './components/UserManagement';
 
 function App() {
   const isAuthenticated = () => {
@@ -75,6 +77,8 @@ function App() {
         <Route path="/admin/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
         <Route path="/admin/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
         <Route path="/admin/submissions" element={<ProtectedRoute><SubmissionsView /></ProtectedRoute>} />
+        <Route path="/admin/roles" element={<ProtectedRoute><RoleManagement /></ProtectedRoute>} />
+        <Route path="/admin/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
         
         <Route path="/" element={<Navigate to="/login" />} />
       </Routes>

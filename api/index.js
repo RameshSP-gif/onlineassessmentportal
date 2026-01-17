@@ -163,10 +163,22 @@ const HRSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+// Role Schema for dynamic role management
+const RoleSchema = new mongoose.Schema({
+  name: { type: String, required: true, unique: true },
+  displayName: { type: String, required: true },
+  description: { type: String },
+  permissions: [{ type: String }],
+  isActive: { type: Boolean, default: true },
+  created_at: { type: Date, default: Date.now },
+  updated_at: { type: Date, default: Date.now }
+});
+
 const Interviewer = mongoose.model('Interviewer', InterviewerSchema);
 const InterviewRequest = mongoose.model('InterviewRequest', InterviewRequestSchema);
 const InterviewSession = mongoose.model('InterviewSession', InterviewSessionSchema);
 const HR = mongoose.model('HR', HRSchema);
+const Role = mongoose.model('Role', RoleSchema);
 
 async function connectDB() {
   // Return existing connection
@@ -2655,6 +2667,280 @@ app.get('/api/payments/poll/:orderId', async (req, res) => {
     });
   } catch (error) {
     console.error('Poll payment error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== ROLE MANAGEMENT APIs ====================
+
+// Get all roles
+app.get('/api/admin/roles', async (req, res) => {
+  try {
+    await connectDB();
+    const roles = await Role.find().sort({ created_at: -1 });
+    res.json(roles);
+  } catch (error) {
+    console.error('Get roles error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get role by ID
+app.get('/api/admin/roles/:id', async (req, res) => {
+  try {
+    await connectDB();
+    const role = await Role.findById(req.params.id);
+    if (!role) return res.status(404).json({ error: 'Role not found' });
+    res.json(role);
+  } catch (error) {
+    console.error('Get role error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create new role
+app.post('/api/admin/roles', async (req, res) => {
+  try {
+    await connectDB();
+    const { name, displayName, description, permissions, isActive } = req.body;
+    
+    const existing = await Role.findOne({ name });
+    if (existing) return res.status(400).json({ error: 'Role already exists' });
+
+    const role = new Role({
+      name,
+      displayName,
+      description,
+      permissions: permissions || [],
+      isActive: isActive !== undefined ? isActive : true
+    });
+    
+    await role.save();
+    res.status(201).json({ message: 'Role created successfully', role });
+  } catch (error) {
+    console.error('Create role error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update role
+app.put('/api/admin/roles/:id', async (req, res) => {
+  try {
+    await connectDB();
+    const { name, displayName, description, permissions, isActive } = req.body;
+    
+    const role = await Role.findById(req.params.id);
+    if (!role) return res.status(404).json({ error: 'Role not found' });
+
+    // Check if name is being changed to an existing name
+    if (name && name !== role.name) {
+      const existing = await Role.findOne({ name });
+      if (existing) return res.status(400).json({ error: 'Role name already exists' });
+    }
+
+    if (name) role.name = name;
+    if (displayName) role.displayName = displayName;
+    if (description !== undefined) role.description = description;
+    if (permissions) role.permissions = permissions;
+    if (isActive !== undefined) role.isActive = isActive;
+    role.updated_at = new Date();
+    
+    await role.save();
+    res.json({ message: 'Role updated successfully', role });
+  } catch (error) {
+    console.error('Update role error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete role
+app.delete('/api/admin/roles/:id', async (req, res) => {
+  try {
+    await connectDB();
+    const role = await Role.findById(req.params.id);
+    if (!role) return res.status(404).json({ error: 'Role not found' });
+
+    await Role.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Role deleted successfully' });
+  } catch (error) {
+    console.error('Delete role error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== USER MANAGEMENT APIs ====================
+
+// Get all users with pagination and filters
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { role, search, page = 1, limit = 50 } = req.query;
+    
+    let query = {};
+    if (role) query.role = role;
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { fullName: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const users = await database.collection('users')
+      .find(query)
+      .project({ password: 0 }) // Exclude password
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .toArray();
+
+    const total = await database.collection('users').countDocuments(query);
+
+    res.json({
+      users,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get user by ID
+app.get('/api/admin/users/:id', async (req, res) => {
+  try {
+    const database = await connectDB();
+    const user = await database.collection('users').findOne(
+      { _id: new ObjectId(req.params.id) },
+      { projection: { password: 0 } }
+    );
+    
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create new user
+app.post('/api/admin/users', async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { username, email, password, fullName, role } = req.body;
+    
+    const existing = await database.collection('users').findOne({ username });
+    if (existing) return res.status(400).json({ error: 'Username already taken' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await database.collection('users').insertOne({
+      username,
+      email,
+      password: hashedPassword,
+      fullName,
+      role: role || 'student',
+      created_at: new Date()
+    });
+
+    const user = await database.collection('users').findOne(
+      { _id: result.insertedId },
+      { projection: { password: 0 } }
+    );
+
+    res.status(201).json({ message: 'User created successfully', user });
+  } catch (error) {
+    console.error('Create user error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update user
+app.put('/api/admin/users/:id', async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { username, email, fullName, role, password } = req.body;
+    
+    const user = await database.collection('users').findOne({ _id: new ObjectId(req.params.id) });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Check if username is being changed to an existing username
+    if (username && username !== user.username) {
+      const existing = await database.collection('users').findOne({ username });
+      if (existing) return res.status(400).json({ error: 'Username already taken' });
+    }
+
+    const updateData = {};
+    if (username) updateData.username = username;
+    if (email) updateData.email = email;
+    if (fullName) updateData.fullName = fullName;
+    if (role) updateData.role = role;
+    if (password) {
+      updateData.password = await bcrypt.hash(password, 10);
+    }
+    updateData.updated_at = new Date();
+
+    await database.collection('users').updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: updateData }
+    );
+
+    const updatedUser = await database.collection('users').findOne(
+      { _id: new ObjectId(req.params.id) },
+      { projection: { password: 0 } }
+    );
+
+    res.json({ message: 'User updated successfully', user: updatedUser });
+  } catch (error) {
+    console.error('Update user error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete user
+app.delete('/api/admin/users/:id', async (req, res) => {
+  try {
+    const database = await connectDB();
+    const user = await database.collection('users').findOne({ _id: new ObjectId(req.params.id) });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    await database.collection('users').deleteOne({ _id: new ObjectId(req.params.id) });
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Assign role to user
+app.patch('/api/admin/users/:id/role', async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { role } = req.body;
+    
+    if (!role) return res.status(400).json({ error: 'Role is required' });
+
+    const user = await database.collection('users').findOne({ _id: new ObjectId(req.params.id) });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    await database.collection('users').updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: { role, updated_at: new Date() } }
+    );
+
+    const updatedUser = await database.collection('users').findOne(
+      { _id: new ObjectId(req.params.id) },
+      { projection: { password: 0 } }
+    );
+
+    res.json({ message: 'Role assigned successfully', user: updatedUser });
+  } catch (error) {
+    console.error('Assign role error:', error);
     res.status(500).json({ error: error.message });
   }
 });

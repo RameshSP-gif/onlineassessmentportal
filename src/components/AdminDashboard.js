@@ -115,6 +115,16 @@ function AdminDashboard() {
             <h3 style={styles.menuTitle}>Students</h3>
             <p style={styles.menuDesc}>Manage student accounts</p>
           </button>
+          <button onClick={() => navigate('/admin/users')} style={styles.menuCard}>
+            <div style={styles.menuIcon}>👤</div>
+            <h3 style={styles.menuTitle}>User Management</h3>
+            <p style={styles.menuDesc}>CRUD on all users</p>
+          </button>
+          <button onClick={() => navigate('/admin/roles')} style={styles.menuCard}>
+            <div style={styles.menuIcon}>🔑</div>
+            <h3 style={styles.menuTitle}>Role Management</h3>
+            <p style={styles.menuDesc}>Create & manage roles</p>
+          </button>
           <button onClick={() => navigate('/admin/exams')} style={styles.menuCard}>
             <div style={styles.menuIcon}>📝</div>
             <h3 style={styles.menuTitle}>Exams</h3>
