@@ -10,6 +10,7 @@
     "server": "node api/index.js",
     "dev": "concurrently \"npm start\" \"nodemon api/index.js\"",
     "seed": "node api/seed.js",
+    "seed-users": "node api/seed-users.js",
     "vercel-build": "CI=false npm run build"
   },
   "dependencies": {
