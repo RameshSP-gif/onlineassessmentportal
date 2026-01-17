@@ -60,24 +60,79 @@ const InterviewerSchema = new mongoose.Schema({
   bio: { type: String },
   rating: { type: Number, default: 0 },
   totalInterviews: { type: Number, default: 0 },
+  availability: [{
+    day: String,
+    timeSlots: [{ start: String, end: String }]
+  }],
+  isAvailable: { type: Boolean, default: true },
   role: { type: String, default: 'interviewer' },
   created_at: { type: Date, default: Date.now }
 });
 
-const InterviewSessionSchema = new mongoose.Schema({
+// Interview Request Schema - Student requests, HR approves
+const InterviewRequestSchema = new mongoose.Schema({
   studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  interviewerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Interviewer', required: true },
-  interviewId: { type: mongoose.Schema.Types.ObjectId, required: true },
+  studentName: { type: String, required: true },
+  studentEmail: { type: String, required: true },
+  interviewType: { 
+    type: String, 
+    enum: ['human', 'ai'],
+    required: true 
+  },
+  interviewMode: { 
+    type: String, 
+    enum: ['online', 'f2f', 'n/a'],
+    default: 'online'
+  },
+  specialization: { type: String, required: true },
+  proposedDates: [{
+    date: { type: Date, required: true },
+    timeSlot: { type: String, required: true }, // e.g., "10:00 AM - 11:00 AM"
+    isAvailable: { type: Boolean, default: true }
+  }],
+  preferredLanguage: { type: String, default: 'English' },
+  additionalNotes: { type: String },
+  status: { 
+    type: String, 
+    enum: ['pending', 'approved', 'rejected', 'scheduled', 'completed', 'cancelled'],
+    default: 'pending' 
+  },
+  hrId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  hrComments: { type: String },
+  assignedInterviewerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Interviewer' },
+  scheduledDate: { type: Date },
+  scheduledTimeSlot: { type: String },
+  meetingLink: { type: String },
+  location: { type: String }, // For F2F interviews
+  rejectionReason: { type: String },
+  created_at: { type: Date, default: Date.now },
+  updated_at: { type: Date, default: Date.now }
+});
+
+const InterviewSessionSchema = new mongoose.Schema({
+  requestId: { type: mongoose.Schema.Types.ObjectId, ref: 'InterviewRequest', required: true },
+  studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  interviewerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Interviewer' },
+  interviewType: { 
+    type: String, 
+    enum: ['human', 'ai'],
+    required: true 
+  },
+  interviewMode: { 
+    type: String, 
+    enum: ['online', 'f2f'],
+    default: 'online'
+  },
   scheduledAt: { type: Date, required: true },
   startedAt: { type: Date },
   endedAt: { type: Date },
   status: { 
     type: String, 
-    enum: ['scheduled', 'in-progress', 'completed', 'cancelled'],
+    enum: ['scheduled', 'in-progress', 'completed', 'cancelled', 'no-show'],
     default: 'scheduled' 
   },
   videoRecordingUrl: { type: String },
-  recordingChunks: [{ type: String }], // Array of video chunk URLs
+  recordingChunks: [{ type: String }],
   transcript: { type: String },
   aiEvaluation: {
     technicalScore: { type: Number },
@@ -87,15 +142,31 @@ const InterviewSessionSchema = new mongoose.Schema({
     strengths: [{ type: String }],
     weaknesses: [{ type: String }],
     feedback: { type: String },
-    recommendation: { type: String }
+    recommendation: { type: String },
+    detailedAnalysis: { type: String }
   },
   interviewerFeedback: { type: String },
-  duration: { type: Number }, // in minutes
+  duration: { type: Number },
+  meetingLink: { type: String },
+  location: { type: String },
+  created_at: { type: Date, default: Date.now }
+});
+
+// HR/Admin Schema
+const HRSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  fullName: { type: String, required: true },
+  department: { type: String, default: 'Human Resources' },
+  role: { type: String, default: 'hr' },
   created_at: { type: Date, default: Date.now }
 });
 
 const Interviewer = mongoose.model('Interviewer', InterviewerSchema);
+const InterviewRequest = mongoose.model('InterviewRequest', InterviewRequestSchema);
 const InterviewSession = mongoose.model('InterviewSession', InterviewSessionSchema);
+const HR = mongoose.model('HR', HRSchema);
 
 async function connectDB() {
   // Return existing connection
@@ -793,6 +864,673 @@ app.get('/api/admin/interviewers', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// =============== NEW INTERVIEW REQUEST SYSTEM ===============
+
+// Student: Submit interview request
+app.post('/api/interview-request', async (req, res) => {
+  try {
+    await connectDB();
+    const {
+      studentId,
+      studentName,
+      studentEmail,
+      interviewType,
+      interviewMode,
+      specialization,
+      proposedDates,
+      preferredLanguage,
+      additionalNotes
+    } = req.body;
+
+    const request = new InterviewRequest({
+      studentId,
+      studentName,
+      studentEmail,
+      interviewType,
+      interviewMode: interviewType === 'ai' ? 'n/a' : interviewMode,
+      specialization,
+      proposedDates,
+      preferredLanguage,
+      additionalNotes,
+      status: 'pending'
+    });
+
+    await request.save();
+
+    res.status(201).json({
+      message: 'Interview request submitted successfully',
+      request
+    });
+  } catch (error) {
+    console.error('Interview request error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Student: Get their interview requests
+app.get('/api/student/:studentId/interview-requests', async (req, res) => {
+  try {
+    await connectDB();
+    const requests = await InterviewRequest.find({ studentId: req.params.studentId })
+      .populate('assignedInterviewerId', 'fullName specialization email')
+      .sort({ created_at: -1 });
+    
+    res.json(requests);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Student: Cancel interview request
+app.patch('/api/interview-request/:id/cancel', async (req, res) => {
+  try {
+    await connectDB();
+    const request = await InterviewRequest.findByIdAndUpdate(
+      req.params.id,
+      { 
+        status: 'cancelled',
+        updated_at: new Date()
+      },
+      { new: true }
+    );
+    
+    res.json(request);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// HR: Get all interview requests
+app.get('/api/hr/interview-requests', async (req, res) => {
+  try {
+    await connectDB();
+    const { status } = req.query;
+    
+    const filter = status ? { status } : {};
+    const requests = await InterviewRequest.find(filter)
+      .populate('studentId', 'username email')
+      .populate('assignedInterviewerId', 'fullName specialization')
+      .sort({ created_at: -1 });
+    
+    res.json(requests);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// HR: Approve interview request and schedule
+app.post('/api/hr/interview-request/:id/approve', async (req, res) => {
+  try {
+    await connectDB();
+    const {
+      hrId,
+      hrComments,
+      assignedInterviewerId,
+      scheduledDate,
+      scheduledTimeSlot,
+      meetingLink,
+      location
+    } = req.body;
+
+    const request = await InterviewRequest.findById(req.params.id);
+    if (!request) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    // Update request
+    request.status = 'approved';
+    request.hrId = hrId;
+    request.hrComments = hrComments;
+    request.assignedInterviewerId = assignedInterviewerId;
+    request.scheduledDate = new Date(scheduledDate);
+    request.scheduledTimeSlot = scheduledTimeSlot;
+    request.meetingLink = meetingLink;
+    request.location = location;
+    request.updated_at = new Date();
+    
+    await request.save();
+
+    // Create interview session
+    const session = new InterviewSession({
+      requestId: request._id,
+      studentId: request.studentId,
+      interviewerId: assignedInterviewerId,
+      interviewType: request.interviewType,
+      interviewMode: request.interviewMode,
+      scheduledAt: new Date(scheduledDate),
+      status: 'scheduled',
+      meetingLink,
+      location
+    });
+
+    await session.save();
+
+    // Update request status to scheduled
+    request.status = 'scheduled';
+    await request.save();
+
+    res.json({
+      message: 'Interview approved and scheduled',
+      request,
+      session
+    });
+  } catch (error) {
+    console.error('Approval error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// HR: Reject interview request
+app.post('/api/hr/interview-request/:id/reject', async (req, res) => {
+  try {
+    await connectDB();
+    const { hrId, rejectionReason } = req.body;
+
+    const request = await InterviewRequest.findByIdAndUpdate(
+      req.params.id,
+      { 
+        status: 'rejected',
+        hrId,
+        rejectionReason,
+        updated_at: new Date()
+      },
+      { new: true }
+    );
+    
+    res.json(request);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// HR: Get dashboard statistics
+app.get('/api/hr/dashboard-stats', async (req, res) => {
+  try {
+    await connectDB();
+    
+    const pendingRequests = await InterviewRequest.countDocuments({ status: 'pending' });
+    const approvedRequests = await InterviewRequest.countDocuments({ status: 'approved' });
+    const scheduledInterviews = await InterviewSession.countDocuments({ status: 'scheduled' });
+    const completedInterviews = await InterviewSession.countDocuments({ status: 'completed' });
+    const totalInterviewers = await Interviewer.countDocuments();
+    
+    const recentRequests = await InterviewRequest.find()
+      .populate('studentId', 'username email')
+      .sort({ created_at: -1 })
+      .limit(10);
+    
+    res.json({
+      stats: {
+        pendingRequests,
+        approvedRequests,
+        scheduledInterviews,
+        completedInterviews,
+        totalInterviewers
+      },
+      recentRequests
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Super AI Interview - Generate AI questions and conduct interview
+app.post('/api/ai-interview/start', async (req, res) => {
+  try {
+    await connectDB();
+    const { sessionId } = req.body;
+    
+    const session = await InterviewSession.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Generate AI interview questions based on specialization
+    const questions = generateAIInterviewQuestions(session);
+    
+    res.json({ questions });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Super AI Interview - Submit answer and get next question
+app.post('/api/ai-interview/answer', async (req, res) => {
+  try {
+    await connectDB();
+    const { sessionId, questionId, answer, currentQuestion } = req.body;
+    
+    // Analyze answer using AI
+    const analysis = analyzeAIAnswer(answer, currentQuestion);
+    
+    res.json({ analysis });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Super AI Interview - Complete and generate comprehensive evaluation
+app.post('/api/ai-interview/complete', async (req, res) => {
+  try {
+    await connectDB();
+    const { sessionId, answers, transcript } = req.body;
+    
+    const session = await InterviewSession.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Generate comprehensive AI evaluation
+    const evaluation = generateComprehensiveAIEvaluation(answers, transcript);
+    
+    session.transcript = transcript;
+    session.aiEvaluation = evaluation;
+    session.status = 'completed';
+    session.endedAt = new Date();
+    session.duration = Math.round((new Date() - new Date(session.startedAt)) / 60000);
+    
+    await session.save();
+
+    res.json({ evaluation, session });
+  } catch (error) {
+    console.error('AI interview completion error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// HR Authentication
+app.post('/api/hr/register', async (req, res) => {
+  try {
+    await connectDB();
+    const { username, email, password, fullName, department } = req.body;
+    
+    const existing = await HR.findOne({ $or: [{ email }, { username }] });
+    if (existing) return res.status(400).json({ error: 'HR account already exists' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const hr = new HR({
+      username,
+      email,
+      password: hashedPassword,
+      fullName,
+      department
+    });
+    
+    await hr.save();
+    
+    const token = jwt.sign(
+      { id: hr._id.toString(), username, role: 'hr' },
+      process.env.JWT_SECRET || 'secret_key_123',
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({
+      message: 'HR registered successfully',
+      token,
+      hr: {
+        id: hr._id.toString(),
+        username: hr.username,
+        email: hr.email,
+        fullName: hr.fullName,
+        role: 'hr'
+      }
+    });
+  } catch (error) {
+    console.error('HR register error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/hr/login', async (req, res) => {
+  try {
+    await connectDB();
+    const { email, password } = req.body;
+    
+    const hr = await HR.findOne({ email });
+    if (!hr) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const isValid = await bcrypt.compare(password, hr.password);
+    if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const token = jwt.sign(
+      { id: hr._id.toString(), username: hr.username, role: 'hr' },
+      process.env.JWT_SECRET || 'secret_key_123',
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      message: 'Login successful',
+      token,
+      hr: {
+        id: hr._id.toString(),
+        username: hr.username,
+        email: hr.email,
+        fullName: hr.fullName,
+        role: 'hr'
+      }
+    });
+  } catch (error) {
+    console.error('HR login error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to generate AI interview questions
+function generateAIInterviewQuestions(session) {
+  const questionBank = {
+    'MERN Stack': [
+      {
+        id: 1,
+        question: 'Explain the difference between React Context API and Redux. When would you use each?',
+        expectedKeywords: ['state management', 'prop drilling', 'scalability', 'middleware'],
+        difficulty: 'medium'
+      },
+      {
+        id: 2,
+        question: 'How do you optimize the performance of a React application?',
+        expectedKeywords: ['memo', 'useMemo', 'useCallback', 'lazy loading', 'code splitting'],
+        difficulty: 'medium'
+      },
+      {
+        id: 3,
+        question: 'Describe how you would implement authentication in a MERN application.',
+        expectedKeywords: ['JWT', 'bcrypt', 'middleware', 'protected routes', 'tokens'],
+        difficulty: 'hard'
+      },
+      {
+        id: 4,
+        question: 'What are MongoDB indexes and why are they important?',
+        expectedKeywords: ['query performance', 'indexing', 'compound index', 'unique'],
+        difficulty: 'easy'
+      },
+      {
+        id: 5,
+        question: 'How do you handle errors in Express.js?',
+        expectedKeywords: ['middleware', 'try-catch', 'error handling', 'status codes'],
+        difficulty: 'easy'
+      }
+    ],
+    'Java Full Stack': [
+      {
+        id: 1,
+        question: 'Explain the Spring Boot dependency injection and its benefits.',
+        expectedKeywords: ['IoC', 'DI', 'loose coupling', 'autowired', 'beans'],
+        difficulty: 'medium'
+      },
+      {
+        id: 2,
+        question: 'How do you handle transactions in Spring?',
+        expectedKeywords: ['@Transactional', 'ACID', 'rollback', 'isolation'],
+        difficulty: 'medium'
+      },
+      {
+        id: 3,
+        question: 'What is the difference between JPA and Hibernate?',
+        expectedKeywords: ['specification', 'implementation', 'ORM', 'entity'],
+        difficulty: 'easy'
+      },
+      {
+        id: 4,
+        question: 'Explain RESTful API design principles.',
+        expectedKeywords: ['HTTP methods', 'stateless', 'resources', 'endpoints'],
+        difficulty: 'medium'
+      },
+      {
+        id: 5,
+        question: 'How do you optimize database queries in Hibernate?',
+        expectedKeywords: ['fetch', 'N+1', 'caching', 'lazy loading'],
+        difficulty: 'hard'
+      }
+    ],
+    'Python Full Stack': [
+      {
+        id: 1,
+        question: 'Explain Django ORM and its advantages.',
+        expectedKeywords: ['ORM', 'QuerySet', 'migrations', 'models'],
+        difficulty: 'medium'
+      },
+      {
+        id: 2,
+        question: 'How do you implement caching in Django?',
+        expectedKeywords: ['Redis', 'Memcached', 'cache', 'performance'],
+        difficulty: 'medium'
+      },
+      {
+        id: 3,
+        question: 'What is the GIL in Python and how does it affect performance?',
+        expectedKeywords: ['Global Interpreter Lock', 'threads', 'multiprocessing'],
+        difficulty: 'hard'
+      },
+      {
+        id: 4,
+        question: 'Explain async/await in Python.',
+        expectedKeywords: ['asyncio', 'coroutines', 'event loop', 'non-blocking'],
+        difficulty: 'medium'
+      },
+      {
+        id: 5,
+        question: 'How do you secure a Django application?',
+        expectedKeywords: ['CSRF', 'XSS', 'SQL injection', 'authentication'],
+        difficulty: 'medium'
+      }
+    ],
+    'DevOps': [
+      {
+        id: 1,
+        question: 'Explain the CI/CD pipeline and its components.',
+        expectedKeywords: ['continuous integration', 'continuous deployment', 'automation', 'testing'],
+        difficulty: 'medium'
+      },
+      {
+        id: 2,
+        question: 'How do you containerize an application using Docker?',
+        expectedKeywords: ['Dockerfile', 'image', 'container', 'layers'],
+        difficulty: 'medium'
+      },
+      {
+        id: 3,
+        question: 'What is Kubernetes and why use it?',
+        expectedKeywords: ['orchestration', 'pods', 'services', 'scaling'],
+        difficulty: 'hard'
+      },
+      {
+        id: 4,
+        question: 'Explain Infrastructure as Code (IaC).',
+        expectedKeywords: ['Terraform', 'CloudFormation', 'version control', 'automation'],
+        difficulty: 'medium'
+      },
+      {
+        id: 5,
+        question: 'How do you monitor applications in production?',
+        expectedKeywords: ['logging', 'metrics', 'alerts', 'Prometheus', 'Grafana'],
+        difficulty: 'medium'
+      }
+    ]
+  };
+
+  const defaultQuestions = [
+    {
+      id: 1,
+      question: 'Tell me about your experience with full-stack development.',
+      expectedKeywords: ['frontend', 'backend', 'database', 'API'],
+      difficulty: 'easy'
+    },
+    {
+      id: 2,
+      question: 'Describe a challenging project you worked on and how you solved it.',
+      expectedKeywords: ['problem-solving', 'solution', 'implementation'],
+      difficulty: 'medium'
+    },
+    {
+      id: 3,
+      question: 'How do you ensure code quality in your projects?',
+      expectedKeywords: ['testing', 'code review', 'best practices', 'standards'],
+      difficulty: 'medium'
+    },
+    {
+      id: 4,
+      question: 'Explain your approach to debugging complex issues.',
+      expectedKeywords: ['debugging', 'tools', 'methodology', 'systematic'],
+      difficulty: 'medium'
+    },
+    {
+      id: 5,
+      question: 'How do you stay updated with new technologies?',
+      expectedKeywords: ['learning', 'documentation', 'community', 'practice'],
+      difficulty: 'easy'
+    }
+  ];
+
+  // Find questions for specialization or use default
+  const questions = questionBank[session.specialization] || defaultQuestions;
+  
+  return questions;
+}
+
+// Helper function to analyze AI answer
+function analyzeAIAnswer(answer, question) {
+  const answerLower = answer.toLowerCase();
+  const keywords = question.expectedKeywords || [];
+  
+  let keywordsFound = 0;
+  keywords.forEach(keyword => {
+    if (answerLower.includes(keyword.toLowerCase())) {
+      keywordsFound++;
+    }
+  });
+  
+  const score = Math.min(100, Math.round((keywordsFound / keywords.length) * 100));
+  const feedback = score >= 70 ? 'Excellent answer with good technical depth' :
+                  score >= 50 ? 'Good answer, but could include more technical details' :
+                  score >= 30 ? 'Adequate answer, missing some key concepts' :
+                  'Answer needs more technical depth and detail';
+  
+  return {
+    score,
+    feedback,
+    keywordsFound,
+    totalKeywords: keywords.length,
+    suggestions: score < 70 ? `Consider mentioning: ${keywords.slice(keywordsFound).join(', ')}` : 'Great coverage!'
+  };
+}
+
+// Helper function to generate comprehensive AI evaluation
+function generateComprehensiveAIEvaluation(answers, transcript) {
+  const transcriptLower = transcript.toLowerCase();
+  
+  // Technical analysis
+  const technicalKeywords = [
+    'algorithm', 'data structure', 'complexity', 'optimization', 'design pattern',
+    'api', 'database', 'scalability', 'performance', 'architecture',
+    'object-oriented', 'functional', 'async', 'framework', 'testing',
+    'debugging', 'deployment', 'security', 'authentication', 'authorization'
+  ];
+  const technicalScore = Math.min(100, technicalKeywords.filter(k => transcriptLower.includes(k)).length * 5 + 30);
+  
+  // Communication analysis
+  const communicationKeywords = [
+    'because', 'therefore', 'however', 'for example', 'in other words',
+    'specifically', 'essentially', 'actually', 'let me explain', 'to clarify'
+  ];
+  const communicationScore = Math.min(100, communicationKeywords.filter(k => transcriptLower.includes(k)).length * 8 + 40);
+  
+  // Problem-solving analysis
+  const problemSolvingKeywords = [
+    'first', 'then', 'next', 'finally', 'approach', 'solution', 'strategy',
+    'consider', 'analyze', 'implement', 'test', 'edge case', 'optimize'
+  ];
+  const problemSolvingScore = Math.min(100, problemSolvingKeywords.filter(k => transcriptLower.includes(k)).length * 7 + 35);
+  
+  // Calculate answer scores
+  let totalAnswerScore = 0;
+  if (answers && answers.length > 0) {
+    answers.forEach(ans => {
+      totalAnswerScore += ans.score || 0;
+    });
+    totalAnswerScore = Math.round(totalAnswerScore / answers.length);
+  }
+  
+  // Weighted overall score
+  const overallScore = Math.round(
+    (technicalScore * 0.35) + 
+    (communicationScore * 0.25) + 
+    (problemSolvingScore * 0.25) +
+    (totalAnswerScore * 0.15)
+  );
+  
+  // Generate strengths and weaknesses
+  const strengths = [];
+  const weaknesses = [];
+  
+  if (technicalScore >= 75) strengths.push('Strong technical knowledge and expertise');
+  else if (technicalScore < 60) weaknesses.push('Technical knowledge needs improvement');
+  
+  if (communicationScore >= 75) strengths.push('Excellent communication and articulation skills');
+  else if (communicationScore < 60) weaknesses.push('Communication could be more clear and structured');
+  
+  if (problemSolvingScore >= 75) strengths.push('Systematic and methodical problem-solving approach');
+  else if (problemSolvingScore < 60) weaknesses.push('Problem-solving methodology needs development');
+  
+  if (totalAnswerScore >= 75) strengths.push('Comprehensive answers with good technical coverage');
+  else if (totalAnswerScore < 60) weaknesses.push('Answers could be more detailed and comprehensive');
+  
+  // Generate detailed feedback
+  const detailedAnalysis = `
+🎯 COMPREHENSIVE AI INTERVIEW EVALUATION
+
+📊 PERFORMANCE BREAKDOWN:
+
+Technical Competency: ${technicalScore}/100 ${technicalScore >= 75 ? '⭐ Excellent' : technicalScore >= 60 ? '✓ Good' : '⚠ Needs Work'}
+${technicalScore >= 75 ? '- Demonstrates strong command of technical concepts and industry standards' :
+  technicalScore >= 60 ? '- Shows good understanding with room for deeper technical knowledge' :
+  '- Requires significant improvement in technical fundamentals'}
+
+Communication Skills: ${communicationScore}/100 ${communicationScore >= 75 ? '⭐ Excellent' : communicationScore >= 60 ? '✓ Good' : '⚠ Needs Work'}
+${communicationScore >= 75 ? '- Articulates ideas clearly with excellent structure and clarity' :
+  communicationScore >= 60 ? '- Communicates effectively with minor improvements needed' :
+  '- Communication needs better structure and clarity'}
+
+Problem Solving: ${problemSolvingScore}/100 ${problemSolvingScore >= 75 ? '⭐ Excellent' : problemSolvingScore >= 60 ? '✓ Good' : '⚠ Needs Work'}
+${problemSolvingScore >= 75 ? '- Shows systematic, analytical approach to problem-solving' :
+  problemSolvingScore >= 60 ? '- Demonstrates good problem-solving with scope for refinement' :
+  '- Problem-solving approach lacks systematic methodology'}
+
+Answer Quality: ${totalAnswerScore}/100 ${totalAnswerScore >= 75 ? '⭐ Excellent' : totalAnswerScore >= 60 ? '✓ Good' : '⚠ Needs Work'}
+${totalAnswerScore >= 75 ? '- Provides comprehensive, well-thought-out answers' :
+  totalAnswerScore >= 60 ? '- Answers are adequate with potential for more depth' :
+  '- Answers need more detail and technical accuracy'}
+
+🎯 KEY STRENGTHS:
+${strengths.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+
+⚠️ AREAS FOR IMPROVEMENT:
+${weaknesses.length > 0 ? weaknesses.map((w, i) => `${i + 1}. ${w}`).join('\n') : 'None identified - Strong performance across all areas'}
+
+💡 RECOMMENDATIONS FOR CANDIDATE:
+${overallScore >= 80 ? '- Maintain current skill level and continue learning advanced concepts\n- Consider mentoring opportunities to share knowledge' :
+  overallScore >= 65 ? '- Focus on strengthening weak areas identified above\n- Practice more technical problems and scenarios' :
+  '- Dedicate time to fundamental concept review\n- Build practical projects to gain hands-on experience\n- Consider structured learning programs or certifications'}
+  `.trim();
+  
+  const recommendation = overallScore >= 85 ? '🌟 HIGHLY RECOMMENDED - Exceptional candidate with strong technical and soft skills. Ready for immediate hiring.' :
+                        overallScore >= 75 ? '✅ STRONGLY RECOMMENDED - Strong candidate who meets all requirements. Recommended for next round.' :
+                        overallScore >= 65 ? '👍 RECOMMENDED - Good candidate with minor gaps. Conditional approval with focused training.' :
+                        overallScore >= 50 ? '⚠️ CONDITIONAL - Average performance with significant gaps. Requires additional evaluation or training.' :
+                        '❌ NOT RECOMMENDED - Below expectations. Candidate needs substantial skill development before reconsideration.';
+  
+  return {
+    technicalScore,
+    communicationScore,
+    problemSolvingScore,
+    overallScore,
+    strengths,
+    weaknesses,
+    feedback: detailedAnalysis,
+    recommendation,
+    detailedAnalysis
+  };
+}
 
 // EXAMS
 app.get('/api/exams', async (req, res) => {
