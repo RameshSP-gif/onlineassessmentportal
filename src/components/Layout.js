@@ -77,6 +77,13 @@ function Layout({ children }) {
                 {sidebarOpen && <span className="nav-label">{item.label}</span>}
               </button>
             ))}
+            <button
+              className="nav-item nav-logout"
+              onClick={handleLogout}
+            >
+              <span className="nav-icon">🚪</span>
+              {sidebarOpen && <span className="nav-label">Logout</span>}
+            </button>
           </nav>
         </aside>
 

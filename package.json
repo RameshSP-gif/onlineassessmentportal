@@ -11,6 +11,8 @@
     "dev": "concurrently \"npm start\" \"nodemon api/index.js\"",
     "seed": "node api/seed.js",
     "seed-users": "node api/seed-users.js",
+    "reset-users": "node api/reset-users.js",
+    "test-login": "node api/test-login.js",
     "vercel-build": "CI=false npm run build"
   },
   "dependencies": {

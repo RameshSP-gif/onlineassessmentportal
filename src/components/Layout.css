@@ -204,6 +204,23 @@
   word-wrap: break-word;
 }
 
+.nav-logout {
+  margin-top: auto;
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
+  border-left-color: #dc2626 !important;
+}
+
+.nav-logout:hover {
+  background: #fecaca !important;
+  transform: translateX(4px);
+}
+
+.nav-logout .nav-label {
+  color: #dc2626 !important;
+  font-weight: 700 !important;
+}
+
 .layout-sidebar.closed .nav-label {
   display: none;
 }

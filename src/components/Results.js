@@ -101,21 +101,25 @@ function Results() {
                   {interviewResults.map((interview) => (
                     <div key={interview.id} className="result-card">
                       <div className="result-header">
-                        <h3>{interview.title}</h3>
-                        <span className="score-badge">{interview.score}/100</span>
+                        <h3>{interview.title || 'Interview'}</h3>
+                        <span className="score-badge">{interview.score || 0}/100</span>
                       </div>
                       <div className="result-details">
-                        <p><strong>Question:</strong> {interview.question}</p>
-                        <div className="ai-analysis">
-                          <h4>AI Analysis:</h4>
-                          <div className="analysis-grid">
-                            <div>Confidence: {interview.ai_analysis.confidence}%</div>
-                            <div>Clarity: {interview.ai_analysis.clarity}%</div>
-                            <div>Relevance: {interview.ai_analysis.relevance}%</div>
-                            <div>Communication: {interview.ai_analysis.communication}%</div>
+                        <p><strong>Question:</strong> {interview.question || 'N/A'}</p>
+                        {interview.ai_analysis ? (
+                          <div className="ai-analysis">
+                            <h4>AI Analysis:</h4>
+                            <div className="analysis-grid">
+                              <div>Confidence: {interview.ai_analysis.confidence || 0}%</div>
+                              <div>Clarity: {interview.ai_analysis.clarity || 0}%</div>
+                              <div>Relevance: {interview.ai_analysis.relevance || 0}%</div>
+                              <div>Communication: {interview.ai_analysis.communication || 0}%</div>
+                            </div>
+                            <p style={{ marginTop: '10px' }}><strong>Feedback:</strong> {interview.ai_analysis.feedback || 'No feedback available'}</p>
                           </div>
-                          <p style={{ marginTop: '10px' }}><strong>Feedback:</strong> {interview.ai_analysis.feedback}</p>
-                        </div>
+                        ) : (
+                          <p style={{ color: '#718096', marginTop: '10px' }}>AI analysis pending...</p>
+                        )}
                         <p style={{ marginTop: '10px' }}>
                           <strong>Completed:</strong> {formatDate(interview.created_at)}
                         </p>
