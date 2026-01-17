@@ -499,9 +499,9 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const database = await connectDB();
-    const { email, password } = req.body;
+    const { username, password } = req.body;
     
-    const user = await database.collection('users').findOne({ email });
+    const user = await database.collection('users').findOne({ username });
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
     const isValid = await bcrypt.compare(password, user.password);
@@ -572,9 +572,9 @@ app.post('/api/interviewer/register', async (req, res) => {
 app.post('/api/interviewer/login', async (req, res) => {
   try {
     await connectDB();
-    const { email, password } = req.body;
+    const { username, password } = req.body;
     
-    const interviewer = await Interviewer.findOne({ email });
+    const interviewer = await Interviewer.findOne({ username });
     if (!interviewer) return res.status(401).json({ error: 'Invalid credentials' });
 
     const isValid = await bcrypt.compare(password, interviewer.password);
@@ -1185,9 +1185,9 @@ app.post('/api/hr/register', async (req, res) => {
 app.post('/api/hr/login', async (req, res) => {
   try {
     await connectDB();
-    const { email, password } = req.body;
+    const { username, password } = req.body;
     
-    const hr = await HR.findOne({ email });
+    const hr = await HR.findOne({ username });
     if (!hr) return res.status(401).json({ error: 'Invalid credentials' });
 
     const isValid = await bcrypt.compare(password, hr.password);

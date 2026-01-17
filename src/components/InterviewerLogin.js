@@ -4,7 +4,7 @@ import api from '../api';
 import './Auth.css';
 
 function InterviewerLogin() {
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formData, setFormData] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -40,14 +40,14 @@ function InterviewerLogin() {
         
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>Email</label>
+            <label>Username</label>
             <input
-              type="email"
-              name="email"
-              value={formData.email}
+              type="text"
+              name="username"
+              value={formData.username}
               onChange={handleChange}
               required
-              placeholder="your@email.com"
+              placeholder="Enter your username"
             />
           </div>
 

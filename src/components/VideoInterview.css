@@ -524,11 +524,6 @@
   font-size: 16px;
   line-height: 1.6;
 }
-  min-height: 400px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 
 .video-preview {
   width: 100%;
