@@ -15,21 +15,53 @@ function Layout({ children }) {
     }
   };
 
-  const menuItems = user.role === 'admin' ? [
-    { path: '/admin', icon: '🏠', label: 'Admin Dashboard' },
-    { path: '/admin/exams', icon: '📝', label: 'Manage Exams' },
-    { path: '/admin/students', icon: '👥', label: 'Students' },
-    { path: '/admin/payments', icon: '💳', label: 'Approve Exam Payments' },
-    { path: '/admin/interview-payments', icon: '🎤', label: 'Approve Interview Payments' },
-    { path: '/admin/results', icon: '📊', label: 'Reports' }
-  ] : [
-    { path: '/dashboard', icon: '🏠', label: 'Dashboard' },
-    { path: '/exams', icon: '📝', label: 'Browse Exams, Pay & Book' },
-    { path: '/payment-status', icon: '💰', label: 'Check Approvals & Take Exam' },
-    { path: '/interviews', icon: '🎤', label: 'Browse Interviews, Pay & Schedule' },
-    { path: '/interview-status', icon: '💳', label: 'Check Approvals & Take Interview' },
-    { path: '/results', icon: '📊', label: 'My Results' }
-  ];
+  // Role-specific menu items
+  const getMenuItems = () => {
+    switch(user.role) {
+      case 'admin':
+        return [
+          { path: '/admin/dashboard', icon: '🏠', label: 'Admin Dashboard' },
+          { path: '/admin/exams', icon: '📝', label: 'Manage Exams' },
+          { path: '/admin/students', icon: '👥', label: 'Manage Students' },
+          { path: '/admin/users', icon: '👤', label: 'User Management' },
+          { path: '/admin/roles', icon: '🔑', label: 'Role Management' },
+          { path: '/admin/payments', icon: '💳', label: 'Exam Payment Approvals' },
+          { path: '/admin/interview-payments', icon: '🎤', label: 'Interview Payment Approvals' },
+          { path: '/admin/results', icon: '📊', label: 'Reports & Analytics' }
+        ];
+      
+      case 'hr':
+        return [
+          { path: '/hr/dashboard', icon: '🏠', label: 'HR Dashboard' },
+          { path: '/hr/interview-requests', icon: '📋', label: 'Interview Requests' },
+          { path: '/hr/schedule', icon: '📅', label: 'Interview Schedule' },
+          { path: '/hr/candidates', icon: '👥', label: 'Manage Candidates' },
+          { path: '/hr/reports', icon: '📊', label: 'HR Reports' }
+        ];
+      
+      case 'interviewer':
+        return [
+          { path: '/interviewer/dashboard', icon: '🏠', label: 'Interviewer Dashboard' },
+          { path: '/interviewer/schedule', icon: '📅', label: 'My Schedule' },
+          { path: '/interviewer/interviews', icon: '🎤', label: 'Conduct Interviews' },
+          { path: '/interviewer/reviews', icon: '📝', label: 'Interview Reviews' },
+          { path: '/interviewer/availability', icon: '🕒', label: 'Set Availability' }
+        ];
+      
+      case 'student':
+      default:
+        return [
+          { path: '/dashboard', icon: '🏠', label: 'Student Dashboard' },
+          { path: '/exams', icon: '📝', label: 'Browse Exams' },
+          { path: '/payment-status', icon: '💰', label: 'Exam Payments & Take Test' },
+          { path: '/interviews', icon: '🎤', label: 'Browse Interviews' },
+          { path: '/interview-status', icon: '💳', label: 'Interview Payments & Schedule' },
+          { path: '/results', icon: '📊', label: 'My Results' }
+        ];
+    }
+  };
+
+  const menuItems = getMenuItems();
 
   return (
     <div className="layout-container">
