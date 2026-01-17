@@ -52,7 +52,7 @@ let connectionPromise = null;
 // MongoDB Schema Models for Interviewers
 const InterviewerSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
-  email: { type: String, required: true, unique: true },
+  email: { type: String, required: true },
   password: { type: String, required: true },
   fullName: { type: String, required: true },
   specialization: { type: String }, // e.g., "Java", "Python", "MERN"
@@ -155,7 +155,7 @@ const InterviewSessionSchema = new mongoose.Schema({
 // HR/Admin Schema
 const HRSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
-  email: { type: String, required: true, unique: true },
+  email: { type: String, required: true },
   password: { type: String, required: true },
   fullName: { type: String, required: true },
   department: { type: String, default: 'Human Resources' },
@@ -471,8 +471,8 @@ app.post('/api/auth/register', async (req, res) => {
     const database = await connectDB();
     const { username, email, password, role } = req.body;
     
-    const existing = await database.collection('users').findOne({ $or: [{ email }, { username }] });
-    if (existing) return res.status(400).json({ error: 'User exists' });
+    const existing = await database.collection('users').findOne({ username });
+    if (existing) return res.status(400).json({ error: 'Username already taken' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await database.collection('users').insertOne({
@@ -530,8 +530,8 @@ app.post('/api/interviewer/register', async (req, res) => {
     await connectDB();
     const { username, email, password, fullName, specialization, experience, bio } = req.body;
     
-    const existing = await Interviewer.findOne({ $or: [{ email }, { username }] });
-    if (existing) return res.status(400).json({ error: 'Interviewer already exists' });
+    const existing = await Interviewer.findOne({ username });
+    if (existing) return res.status(400).json({ error: 'Username already taken' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const interviewer = new Interviewer({
@@ -1145,8 +1145,8 @@ app.post('/api/hr/register', async (req, res) => {
     await connectDB();
     const { username, email, password, fullName, department } = req.body;
     
-    const existing = await HR.findOne({ $or: [{ email }, { username }] });
-    if (existing) return res.status(400).json({ error: 'HR account already exists' });
+    const existing = await HR.findOne({ username });
+    if (existing) return res.status(400).json({ error: 'Username already taken' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const hr = new HR({
