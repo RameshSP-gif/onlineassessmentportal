@@ -1,29 +1,63 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { auth } from '../api';
+import api from '../api';
 import './Auth.css';
 
 function Register() {
+  const [step, setStep] = useState(1); // 1: Form, 2: OTP Verification
   const [formData, setFormData] = useState({
     username: '',
     email: '',
     password: '',
     confirmPassword: '',
+    phone: '',
+    otp: '',
     role: 'student'
   });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
+  const handleSendOTP = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
+    if (!/^\d{10}$/.test(formData.phone)) {
+      setError('Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await api.post('/auth/send-otp', { phone: formData.phone });
+      setSuccess('OTP sent successfully to your phone!');
+      setOtpSent(true);
+      setStep(2);
+      
+      // In development, show OTP
+      if (response.data.otp) {
+        setSuccess(`OTP sent! (Dev Mode: ${response.data.otp})`);
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to send OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyAndRegister = async (e) => {
+    e.preventDefault();
+    setError('');
     setLoading(true);
 
     try {
@@ -31,17 +65,21 @@ function Register() {
         username: formData.username,
         email: formData.email,
         password: formData.password,
+        phone: formData.phone,
+        otp: formData.otp,
         role: formData.role
       });
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       
-      // Redirect admin to admin dashboard
-      if (formData.role === 'admin') {
-        navigate('/admin/dashboard');
-      } else {
-        navigate('/dashboard');
-      }
+      setSuccess('Registration successful! Redirecting...');
+      setTimeout(() => {
+        if (formData.role === 'admin') {
+          navigate('/admin/dashboard');
+        } else {
+          navigate('/dashboard');
+        }
+      }, 1500);
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed');
     } finally {
@@ -58,8 +96,10 @@ function Register() {
         </p>
 
         {error && <div className="error">{error}</div>}
+        {success && <div style={{ padding: '12px', background: '#d4edda', color: '#155724', borderRadius: '8px', marginBottom: '15px', border: '1px solid #c3e6cb' }}>{success}</div>}
 
-        <form onSubmit={handleSubmit}>
+        {step === 1 && (
+        <form onSubmit={handleSendOTP}>
           <div className="form-group">
             <label>Username</label>
             <input
@@ -79,6 +119,18 @@ function Register() {
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Phone Number</label>
+            <input
+              type="tel"
+              placeholder="Enter 10-digit phone number"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+              required
+              maxLength="10"
             />
           </div>
 
@@ -116,9 +168,43 @@ function Register() {
           </div>
 
           <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%' }}>
-            {loading ? 'Registering...' : 'Register'}
+            {loading ? 'Sending OTP...' : 'Send OTP'}
           </button>
         </form>
+        )}
+
+        {step === 2 && (
+        <form onSubmit={handleVerifyAndRegister}>
+          <div className="form-group">
+            <label>Enter OTP</label>
+            <input
+              type="text"
+              placeholder="Enter 6-digit OTP"
+              value={formData.otp}
+              onChange={(e) => setFormData({ ...formData, otp: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+              required
+              maxLength="6"
+              style={{ fontSize: '20px', letterSpacing: '8px', textAlign: 'center' }}
+            />
+            <p style={{ fontSize: '13px', color: '#718096', marginTop: '8px' }}>
+              OTP sent to +91-{formData.phone}
+            </p>
+          </div>
+
+          <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%', marginBottom: '10px' }}>
+            {loading ? 'Verifying...' : 'Verify & Register'}
+          </button>
+          
+          <button 
+            type="button" 
+            onClick={() => { setStep(1); setOtpSent(false); setFormData({ ...formData, otp: '' }); }}
+            className="btn"
+            style={{ width: '100%', background: '#e2e8f0', color: '#2d3748' }}
+          >
+            ← Back to Form
+          </button>
+        </form>
+        )}
 
         <p className="text-center mt-20">
           Already have an account? <Link to="/login" style={{ color: '#667eea', fontWeight: '600' }}>Login</Link>

@@ -478,17 +478,83 @@ app.get('/api', async (req, res) => {
 });
 
 // AUTH
+// OTP storage (in production, use Redis or database)
+const otpStore = new Map();
+
+// Send OTP endpoint
+app.post('/api/auth/send-otp', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    
+    if (!phone || !/^\d{10}$/.test(phone)) {
+      return res.status(400).json({ error: 'Valid 10-digit phone number required' });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Store OTP with 5-minute expiry
+    otpStore.set(phone, {
+      otp,
+      expiresAt: Date.now() + 5 * 60 * 1000 // 5 minutes
+    });
+
+    // In production, send SMS via Twilio/AWS SNS
+    console.log(`📱 OTP for ${phone}: ${otp}`);
+    
+    res.json({
+      message: 'OTP sent successfully',
+      // In development, return OTP (remove in production)
+      otp: process.env.NODE_ENV === 'development' ? otp : undefined
+    });
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Verify OTP and register
 app.post('/api/auth/register', async (req, res) => {
   try {
     const database = await connectDB();
-    const { username, email, password, role } = req.body;
+    const { username, email, password, role, phone, otp } = req.body;
+    
+    // For student registration, verify OTP
+    if (role === 'student' || !role) {
+      if (!phone || !otp) {
+        return res.status(400).json({ error: 'Phone number and OTP required for student registration' });
+      }
+
+      const storedOTP = otpStore.get(phone);
+      if (!storedOTP) {
+        return res.status(400).json({ error: 'OTP expired or not found. Please request a new OTP' });
+      }
+
+      if (storedOTP.expiresAt < Date.now()) {
+        otpStore.delete(phone);
+        return res.status(400).json({ error: 'OTP expired. Please request a new OTP' });
+      }
+
+      if (storedOTP.otp !== otp) {
+        return res.status(400).json({ error: 'Invalid OTP' });
+      }
+
+      // OTP verified, delete it
+      otpStore.delete(phone);
+    }
     
     const existing = await database.collection('users').findOne({ username });
     if (existing) return res.status(400).json({ error: 'Username already taken' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await database.collection('users').insertOne({
-      username, email, password: hashedPassword, role: role || 'student', created_at: new Date()
+      username, 
+      email, 
+      password: hashedPassword, 
+      role: role || 'student',
+      phone: phone || null,
+      phoneVerified: (role === 'student' || !role) ? true : false,
+      created_at: new Date()
     });
 
     const token = jwt.sign(
@@ -498,9 +564,9 @@ app.post('/api/auth/register', async (req, res) => {
     );
 
     res.status(201).json({
-      message: 'Registered',
+      message: 'Registered successfully',
       token,
-      user: { id: result.insertedId.toString(), username, email, role: role || 'student' }
+      user: { id: result.insertedId.toString(), username, email, phone, role: role || 'student' }
     });
   } catch (error) {
     console.error('Register error:', error);
