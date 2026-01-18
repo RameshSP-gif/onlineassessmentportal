@@ -581,7 +581,17 @@ app.post('/api/auth/send-otp', async (req, res) => {
 app.post('/api/auth/register', async (req, res) => {
   try {
     const database = await connectDB();
-    const { username, email, password, role, otp } = req.body;
+    const { username, email, password, phone, role, otp } = req.body;
+    
+    // Validate required fields
+    if (!username || !email || !password || !phone) {
+      return res.status(400).json({ error: 'Username, email, password, and phone are required' });
+    }
+
+    // Validate phone format
+    if (!/^[0-9]{10}$/.test(phone.replace(/[^0-9]/g, ''))) {
+      return res.status(400).json({ error: 'Phone number must be 10 digits' });
+    }
     
     // For student registration, verify OTP
     if (role === 'student' || !role) {
@@ -615,8 +625,8 @@ app.post('/api/auth/register', async (req, res) => {
       username, 
       email, 
       password: hashedPassword, 
+      phone: phone,
       role: role || 'student',
-      phone: email,
       phoneVerified: (role === 'student' || !role) ? true : false,
       created_at: new Date()
     });
@@ -630,7 +640,7 @@ app.post('/api/auth/register', async (req, res) => {
     res.status(201).json({
       message: 'Registered successfully',
       token,
-      user: { id: result.insertedId.toString(), username, email, role: role || 'student' }
+      user: { id: result.insertedId.toString(), username, email, phone, role: role || 'student' }
     });
   } catch (error) {
     console.error('Register error:', error);

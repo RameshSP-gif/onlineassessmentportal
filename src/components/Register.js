@@ -26,13 +26,33 @@ function Register() {
     setError('');
     setSuccess('');
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+    if (!formData.username.trim()) {
+      setError('Username is required');
       return;
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       setError('Please enter a valid email address');
+      return;
+    }
+
+    if (!formData.phone.trim()) {
+      setError('Phone number is required');
+      return;
+    }
+
+    if (!/^[0-9]{10}$/.test(formData.phone.replace(/[\D]/g, ''))) {
+      setError('Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters');
       return;
     }
 
@@ -65,6 +85,7 @@ function Register() {
         username: formData.username,
         email: formData.email,
         password: formData.password,
+        phone: formData.phone,
         otp: formData.otp,
         role: formData.role
       });
@@ -114,6 +135,18 @@ function Register() {
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Phone Number</label>
+            <input
+              type="tel"
+              placeholder="Enter your 10-digit phone number"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/[^0-9]/g, '').slice(0, 10) })}
+              required
+              maxLength="10"
             />
           </div>
 
