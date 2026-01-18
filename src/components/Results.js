@@ -20,8 +20,19 @@ function Results() {
         submissions.getMine(),
         interviews.getMine()
       ]);
-      setExamResults(examsRes.data);
-      setInterviewResults(interviewsRes.data);
+      
+      // Sort exam results by submitted_at (latest first)
+      const sortedExams = examsRes.data.sort((a, b) => {
+        return new Date(b.submitted_at) - new Date(a.submitted_at);
+      });
+      
+      // Sort interview results by created_at (latest first)
+      const sortedInterviews = interviewsRes.data.sort((a, b) => {
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+      
+      setExamResults(sortedExams);
+      setInterviewResults(sortedInterviews);
     } catch (error) {
       console.error('Error loading results:', error);
     } finally {

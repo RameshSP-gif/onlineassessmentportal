@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api';
 import Layout from './Layout';
 import './Payment.css';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
 
 function Payment() {
   const { examId } = useParams();
@@ -35,7 +33,7 @@ function Payment() {
   const initializePayment = async () => {
     try {
       const user = JSON.parse(localStorage.getItem('user'));
-      const orderResponse = await axios.post(`${API_URL}/payments/create-order`, {
+      const orderResponse = await api.post('/payments/create-order', {
         examId,
         userId: user.id
       });
@@ -48,7 +46,7 @@ function Payment() {
 
   const loadExam = async () => {
     try {
-      const response = await axios.get(`${API_URL}/exams/${examId}`);
+      const response = await api.get(`/exams/${examId}`);
       setExam(response.data);
     } catch (error) {
       console.error('Error loading exam:', error);
@@ -61,7 +59,7 @@ function Payment() {
   const checkPaymentStatus = async () => {
     try {
       const user = JSON.parse(localStorage.getItem('user'));
-      const response = await axios.get(`${API_URL}/payments/status/${examId}/${user.id}`);
+      const response = await api.get(`/payments/status/${examId}/${user.id}`);
       
       if (response.data.paid) {
         // Already paid, redirect to exam
@@ -99,35 +97,50 @@ function Payment() {
       formData.append('transactionId', 'Not provided');
       formData.append('upiId', 'Not provided');
       
-      const uploadResponse = await axios.post(`${API_URL}/payments/upload-screenshot`, formData, {
+      console.log('Submitting payment proof for order:', currentOrderId);
+      
+      const uploadResponse = await api.post('/payments/upload-screenshot', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       });
       
+      console.log('Upload response:', uploadResponse.data);
+      
       if (uploadResponse.data.success) {
-        setPaymentMessage('✅ Payment proof submitted! Awaiting admin verification...');
-        setProcessing(false);
+        // Show success message
+        setPaymentMessage('✅ Payment proof submitted successfully! Admin will verify & approve within 5 minutes.');
         
+        // Show browser alert for confirmation
+        alert('✅ Success!\n\nYour payment proof has been submitted for verification.\n\nAdmin will review and approve within 5 minutes.\n\nYou will be automatically redirected once approved.');
+        
+        // Keep processing true while waiting for approval
         // Start polling for admin approval
         startAdminApprovalPolling(currentOrderId);
+      } else {
+        throw new Error('Upload failed');
       }
     } catch (error) {
-      console.error('UPI payment error:', error);
-      setError(error.response?.data?.error || 'Failed to upload screenshot. Please try again.');
+      console.error('Payment submission error:', error);
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to upload screenshot. Please try again.';
+      setError(errorMsg);
       setProcessing(false);
       setPaymentMessage('');
+      alert('❌ Upload Failed\n\n' + errorMsg);
     }
   };
 
   const startAdminApprovalPolling = (orderId) => {
+    console.log('Starting admin approval polling for order:', orderId);
     const interval = setInterval(async () => {
       try {
-        const response = await axios.get(`${API_URL}/payments/poll/${orderId}`);
+        const response = await api.get(`/payments/poll/${orderId}`);
+        console.log('Polling response:', response.data);
         
         if (response.data.status === 'completed') {
           clearInterval(interval);
           setPaymentMessage('✅ Payment verified by admin! Redirecting to exam...');
+          alert('✅ Payment Approved!\n\nYour payment has been verified by the admin.\n\nRedirecting to exam now...');
           setTimeout(() => {
             navigate(`/take-exam/${examId}`);
           }, 2000);
@@ -135,6 +148,7 @@ function Payment() {
           clearInterval(interval);
           setPaymentMessage('❌ Payment rejected. Please contact support or try again.');
           setProcessing(false);
+          alert('❌ Payment Rejected\n\nYour payment proof was rejected.\n\nPlease contact support or submit again with correct details.');
         }
       } catch (error) {
         console.error('Polling error:', error);

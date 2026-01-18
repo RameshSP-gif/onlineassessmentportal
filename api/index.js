@@ -2012,7 +2012,11 @@ app.get('/api/notifications', async (req, res) => {
 app.get('/api/submissions/me', verifyAuth, requireRole(['student']), async (req, res) => {
   try {
     const database = await connectDB();
-    const submissions = await database.collection('submissions').find({}).toArray();
+    // Get submissions sorted by submitted_at in descending order (latest first)
+    const submissions = await database.collection('submissions')
+      .find({})
+      .sort({ submitted_at: -1 })
+      .toArray();
     
     // Enrich submissions with exam details and calculated percentage
     const enrichedSubmissions = await Promise.all(submissions.map(async (sub) => {
@@ -2040,7 +2044,11 @@ app.get('/api/submissions/me', verifyAuth, requireRole(['student']), async (req,
 app.get('/api/submissions/all', async (req, res) => {
   try {
     const database = await connectDB();
-    const submissions = await database.collection('submissions').find({}).toArray();
+    // Sort by submitted_at in descending order (latest first)
+    const submissions = await database.collection('submissions')
+      .find({})
+      .sort({ submitted_at: -1 })
+      .toArray();
     
     // Enrich submissions with exam details
     const enrichedSubmissions = await Promise.all(submissions.map(async (sub) => {
@@ -2087,7 +2095,11 @@ app.post('/api/interviews/submit', async (req, res) => {
 app.get('/api/interviews/me', async (req, res) => {
   try {
     const database = await connectDB();
-    const interviews = await database.collection('interviews').find({}).toArray();
+    // Sort by created_at in descending order (latest first)
+    const interviews = await database.collection('interviews')
+      .find({})
+      .sort({ created_at: -1 })
+      .toArray();
     res.json(interviews);
   } catch (error) {
     res.status(500).json({ error: error.message });
