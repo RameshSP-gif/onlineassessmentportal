@@ -84,8 +84,14 @@ function Layout({ children }) {
           <h1 className="header-title">Assessment Portal</h1>
         </div>
         <div className="header-right">
+          <button 
+            className="btn-profile"
+            onClick={() => navigate('/profile')}
+            title="View Profile"
+          >
+            👤 Profile
+          </button>
           <div className="user-info">
-            <span className="user-icon">👤</span>
             <span className="user-name">{user.username || user.name}</span>
             <span className="user-role">{user.role}</span>
           </div>
@@ -109,6 +115,13 @@ function Layout({ children }) {
                 {sidebarOpen && <span className="nav-label">{item.label}</span>}
               </button>
             ))}
+            <button
+              className={`nav-item ${location.pathname === '/profile' ? 'active' : ''}`}
+              onClick={() => navigate('/profile')}
+            >
+              <span className="nav-icon">👤</span>
+              {sidebarOpen && <span className="nav-label">My Profile</span>}
+            </button>
             <button
               className="nav-item nav-logout"
               onClick={handleLogout}

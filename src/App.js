@@ -2,7 +2,10 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import Register from './components/Register';
+import ForgotPassword from './components/ForgotPassword';
+import ChangePassword from './components/ChangePassword';
 import Dashboard from './components/Dashboard';
+import Profile from './components/Profile';
 import ExamList from './components/ExamList';
 import TakeExam from './components/TakeExam';
 import Payment from './components/Payment';
@@ -55,8 +58,16 @@ function App() {
   return (
     <Router>
       <Routes>
+        {/* Public Auth Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        
+        {/* Password Management - Protected Routes */}
+        <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
+        
+        {/* Profile Route - Available to all authenticated users */}
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         
         {/* Student Routes */}
         <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['student']}><Dashboard /></ProtectedRoute>} />

@@ -1,6 +1,10 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || '/api';
+// Use direct URL in development, relative in production
+const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const API_URL = isDevelopment 
+  ? 'http://localhost:3002/api' 
+  : (process.env.REACT_APP_API_URL || '/api');
 
 const api = axios.create({
   baseURL: API_URL,

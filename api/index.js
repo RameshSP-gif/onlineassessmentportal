@@ -476,6 +476,9 @@ const verifyAuth = (req, res, next) => {
   }
 };
 
+// Alias for verifyAuth
+const authenticateToken = verifyAuth;
+
 // Role-based authorization middleware
 const requireRole = (roles) => (req, res, next) => {
   if (!req.user) {
@@ -515,15 +518,24 @@ const otpStore = new Map();
 const nodemailer = require('nodemailer');
 
 // Email transporter configuration
-const emailTransporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER || 'your-email@gmail.com',
-    pass: process.env.EMAIL_PASS || 'your-app-password'
-  }
-});
+let emailTransporter;
+
+// Initialize email transporter based on environment
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  // Production: Use Gmail or custom SMTP with provided credentials
+  emailTransporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.EMAIL_PORT) || 587,
+    secure: false,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+  console.log(`📧 Email configured with Gmail: ${process.env.EMAIL_USER}`);
+} else {
+  console.log(`⚠️  No email credentials found. OTP will be logged to console only.`);
+}
 
 // Send OTP endpoint
 app.post('/api/auth/send-otp', async (req, res) => {
@@ -543,34 +555,48 @@ app.post('/api/auth/send-otp', async (req, res) => {
       expiresAt: Date.now() + 5 * 60 * 1000 // 5 minutes
     });
 
-    // Send email with OTP
-    try {
-      await emailTransporter.sendMail({
-        from: process.env.EMAIL_USER || 'Online Assessment Portal <noreply@assessment.com>',
-        to: email,
-        subject: 'Your OTP for Registration',
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #667eea;">Online Assessment Portal</h2>
-            <p>Your OTP for registration is:</p>
-            <h1 style="background: #f7fafc; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 8px; color: #2d3748; border-radius: 8px;">${otp}</h1>
-            <p style="color: #718096; font-size: 14px;">This OTP is valid for 5 minutes.</p>
-            <p style="color: #718096; font-size: 14px;">If you didn't request this, please ignore this email.</p>
-          </div>
-        `
+    console.log(`\n🔐 OTP Generated for ${email}: ${otp}`);
+
+    // Send email with OTP if transporter is configured
+    if (emailTransporter) {
+      try {
+        const info = await emailTransporter.sendMail({
+          from: `"Online Assessment Portal" <${process.env.EMAIL_USER || 'noreply@assessment.com'}>`,
+          to: email,
+          subject: 'Your OTP for Registration - Online Assessment Portal',
+          html: `
+            <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #667eea;">Online Assessment Portal</h2>
+              <p>Your OTP for registration is:</p>
+              <h1 style="background: #f7fafc; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 8px; color: #2d3748; border-radius: 8px;">${otp}</h1>
+              <p style="color: #718096; font-size: 14px;">This OTP is valid for 5 minutes.</p>
+              <p style="color: #718096; font-size: 14px;">If you didn't request this, please ignore this email.</p>
+            </div>
+          `
+        });
+        
+        console.log(`✅ Email sent successfully to ${email}`);
+        console.log(`📧 Message ID: ${info.messageId}`);
+        
+        return res.json({
+          message: 'OTP sent successfully to your email',
+          otp: otp // Include for development/testing
+        });
+      } catch (emailError) {
+        console.error('❌ Email send error:', emailError);
+        return res.status(500).json({ 
+          error: 'Failed to send OTP email. Please check server configuration.',
+          details: emailError.message 
+        });
+      }
+    } else {
+      // No email configured - just return OTP for testing
+      console.log(`⚠️  Email not configured. OTP: ${otp}`);
+      return res.json({
+        message: 'OTP generated (email not configured)',
+        otp: otp
       });
-      console.log(`📧 OTP sent to ${email}: ${otp}`);
-    } catch (emailError) {
-      console.error('Email send error:', emailError);
-      // Fallback: still allow registration in dev mode
-      console.log(`📧 [DEV MODE] OTP for ${email}: ${otp}`);
     }
-    
-    res.json({
-      message: 'OTP sent successfully to your email',
-      // Always return OTP for testing (in production, remove this)
-      otp: otp
-    });
   } catch (error) {
     console.error('Send OTP error:', error);
     res.status(500).json({ error: error.message });
@@ -675,6 +701,339 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Get user profile
+app.get('/api/auth/profile', authenticateToken, async (req, res) => {
+  try {
+    const database = await connectDB();
+    const user = await database.collection('users').findOne(
+      { _id: new ObjectId(req.user.id) },
+      { projection: { password: 0 } }
+    );
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      id: user._id.toString(),
+      username: user.username,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      phoneVerified: user.phoneVerified,
+      created_at: user.created_at
+    });
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update user profile
+app.put('/api/auth/profile', authenticateToken, async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { email, phone, fullName, currentPassword, newPassword } = req.body;
+
+    // Validate required fields
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Validate phone format if provided
+    if (phone && !/^[0-9]{10}$/.test(phone.replace(/[^0-9]/g, ''))) {
+      return res.status(400).json({ error: 'Phone number must be 10 digits' });
+    }
+
+    const user = await database.collection('users').findOne({ _id: new ObjectId(req.user.id) });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const updateData = {
+      email,
+      phone: phone || user.phone,
+      updated_at: new Date()
+    };
+
+    // Handle password change
+    if (newPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({ error: 'Current password is required to change password' });
+      }
+
+      const isValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Current password is incorrect' });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'New password must be at least 6 characters' });
+      }
+
+      updateData.password = await bcrypt.hash(newPassword, 10);
+    }
+
+    await database.collection('users').updateOne(
+      { _id: new ObjectId(req.user.id) },
+      { $set: updateData }
+    );
+
+    const updatedUser = await database.collection('users').findOne(
+      { _id: new ObjectId(req.user.id) },
+      { projection: { password: 0 } }
+    );
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: {
+        id: updatedUser._id.toString(),
+        username: updatedUser.username,
+        email: updatedUser.email,
+        phone: updatedUser.phone,
+        fullName: updatedUser.fullName,
+        role: updatedUser.role,
+        created_at: updatedUser.created_at
+      }
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============= PASSWORD MANAGEMENT ENDPOINTS =============
+
+// Forgot Password - Send reset OTP
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { email } = req.body;
+    
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Valid email address required' });
+    }
+
+    // Check if user exists
+    const user = await database.collection('users').findOne({ email });
+    if (!user) {
+      // For security, don't reveal if email exists
+      return res.json({ message: 'If the email exists, a reset code has been sent' });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Store OTP with 10-minute expiry for password reset
+    otpStore.set(`reset_${email}`, {
+      otp,
+      expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
+    });
+
+    console.log(`🔑 Password Reset OTP for ${email}: ${otp}`);
+
+    // Send email if transporter is configured
+    let emailSent = false;
+    if (emailTransporter) {
+      try {
+        await emailTransporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: email,
+          subject: 'Password Reset - Assessment Portal',
+          html: `
+            <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px;">
+              <h2 style="color: #667eea;">Password Reset Request</h2>
+              <p>You requested to reset your password for Assessment Portal.</p>
+              <div style="background-color: #f7fafc; border: 2px solid #667eea; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
+                <p style="margin: 0; color: #718096; font-size: 14px;">Your Reset Code:</p>
+                <h1 style="margin: 10px 0; color: #667eea; font-size: 32px; letter-spacing: 5px;">${otp}</h1>
+                <p style="margin: 0; color: #718096; font-size: 12px;">Valid for 10 minutes</p>
+              </div>
+              <p style="color: #e53e3e; font-size: 14px;">⚠️ If you didn't request this, please ignore this email.</p>
+              <p style="color: #718096; font-size: 12px; margin-top: 30px;">This is an automated email. Please do not reply.</p>
+            </div>
+          `
+        });
+        console.log('✅ Password reset email sent successfully');
+        emailSent = true;
+      } catch (emailError) {
+        console.error('Email send error:', emailError);
+        // Continue even if email fails
+      }
+    }
+
+    // Always return OTP when not running on Vercel (for local testing)
+    if (!process.env.VERCEL) {
+      return res.json({ 
+        message: emailSent ? 'Reset code sent to your email' : 'Reset code generated (email disabled)',
+        otp, // For local development and testing
+        email 
+      });
+    }
+
+    res.json({ message: 'If the email exists, a reset code has been sent' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Verify Reset OTP
+app.post('/api/auth/verify-reset-otp', async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Email and OTP required' });
+    }
+
+    const storedOTP = otpStore.get(`reset_${email}`);
+    if (!storedOTP) {
+      return res.status(400).json({ error: 'Reset code expired or not found' });
+    }
+
+    if (storedOTP.expiresAt < Date.now()) {
+      otpStore.delete(`reset_${email}`);
+      return res.status(400).json({ error: 'Reset code expired' });
+    }
+
+    if (storedOTP.otp !== otp) {
+      return res.status(400).json({ error: 'Invalid reset code' });
+    }
+
+    // Generate temporary reset token (valid for 15 minutes)
+    const resetToken = jwt.sign(
+      { email, purpose: 'password-reset' },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    // Don't delete OTP yet - will delete after password reset
+    res.json({ 
+      message: 'Reset code verified',
+      resetToken 
+    });
+  } catch (error) {
+    console.error('Verify reset OTP error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reset Password with token
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { resetToken, newPassword } = req.body;
+
+    if (!resetToken || !newPassword) {
+      return res.status(400).json({ error: 'Reset token and new password required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Verify reset token
+    let decoded;
+    try {
+      decoded = jwt.verify(resetToken, JWT_SECRET);
+      if (decoded.purpose !== 'password-reset') {
+        return res.status(400).json({ error: 'Invalid reset token' });
+      }
+    } catch (err) {
+      return res.status(400).json({ error: 'Reset token expired or invalid' });
+    }
+
+    const { email } = decoded;
+
+    // Find user
+    const user = await database.collection('users').findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await database.collection('users').updateOne(
+      { email },
+      { 
+        $set: { 
+          password: hashedPassword,
+          updated_at: new Date()
+        } 
+      }
+    );
+
+    // Delete the reset OTP
+    otpStore.delete(`reset_${email}`);
+
+    console.log(`✅ Password reset successful for: ${email}`);
+
+    res.json({ message: 'Password reset successful. You can now login with your new password.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Change Password (for logged-in users)
+app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ error: 'New password must be different from current password' });
+    }
+
+    // Get user
+    const user = await database.collection('users').findOne({ _id: new ObjectId(req.user.id) });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify current password
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await database.collection('users').updateOne(
+      { _id: new ObjectId(req.user.id) },
+      { 
+        $set: { 
+          password: hashedPassword,
+          updated_at: new Date()
+        } 
+      }
+    );
+
+    console.log(`✅ Password changed successfully for user: ${user.username}`);
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============= END PASSWORD MANAGEMENT ENDPOINTS =============
 
 // INTERVIEWER AUTH & MANAGEMENT
 app.post('/api/interviewer/register', async (req, res) => {
@@ -3099,5 +3458,51 @@ app.patch('/api/admin/users/:id/role', async (req, res) => {
 
 module.exports = app;
 
-// Always listen in development
-app.listen(PORT, () => console.log(`✅ Server on ${PORT}`));
+// Always listen in development and initialize DB connection
+async function startServer() {
+  try {
+    // Initialize MongoDB connection before starting server
+    await connectDB();
+    
+    const server = app.listen(PORT, () => {
+      console.log(`✅ Server on ${PORT}`);
+    });
+    
+    // Keep process alive and handle errors
+    server.on('error', (error) => {
+      console.error('❌ Server error:', error);
+    });
+    
+    // Handle graceful shutdown
+    process.on('SIGTERM', () => {
+      console.log('SIGTERM signal received: closing HTTP server');
+      server.close(() => {
+        console.log('HTTP server closed');
+        mongoose.connection.close().then(() => {
+          console.log('MongoDB connection closed');
+          process.exit(0);
+        });
+      });
+    });
+    
+    process.on('SIGINT', () => {
+      console.log('\nSIGINT signal received: closing HTTP server');
+      server.close(() => {
+        console.log('HTTP server closed');
+        mongoose.connection.close().then(() => {
+          console.log('MongoDB connection closed');
+          process.exit(0);
+        });
+      });
+    });
+    
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Only start server if this file is run directly (not imported by Vercel)
+if (require.main === module) {
+  startServer();
+}

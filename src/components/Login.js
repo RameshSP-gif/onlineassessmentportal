@@ -105,6 +105,24 @@ function Login() {
             />
           </div>
 
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'flex-end', 
+            marginBottom: '20px' 
+          }}>
+            <Link 
+              to="/forgot-password" 
+              style={{ 
+                color: '#667eea', 
+                fontSize: '14px', 
+                textDecoration: 'none',
+                fontWeight: '500'
+              }}
+            >
+              Forgot Password?
+            </Link>
+          </div>
+
           <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%' }}>
             {loading ? 'Logging in...' : 'Login'}
           </button>
