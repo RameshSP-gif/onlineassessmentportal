@@ -73,11 +73,7 @@ function Register() {
       
       setSuccess('Registration successful! Redirecting...');
       setTimeout(() => {
-        if (formData.role === 'admin') {
-          navigate('/admin/dashboard');
-        } else {
-          navigate('/dashboard');
-        }
+        navigate('/dashboard');
       }, 1500);
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed');
@@ -150,7 +146,6 @@ function Register() {
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
             >
               <option value="student">Student</option>
-              <option value="admin">Admin</option>
             </select>
           </div>
 
