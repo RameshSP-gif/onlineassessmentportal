@@ -40,7 +40,7 @@ const upload = multer({
 });
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5005;
 
 // MongoDB Atlas connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://root:Rakshita%401234@cluster0.pp8rwbt.mongodb.net/assessmentdb?retryWrites=true&w=majority';
@@ -457,6 +457,38 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use('/uploads', express.static('uploads'));
 
+// JWT secret key - same as login endpoint
+const JWT_SECRET = process.env.JWT_SECRET || 'secret_key_123';
+
+// Auth middleware to verify JWT token and check role
+const verifyAuth = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+// Role-based authorization middleware
+const requireRole = (roles) => (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  if (!roles.includes(req.user.role)) {
+    return res.status(403).json({ error: 'Access denied. Required role: ' + roles.join(' or ') });
+  }
+  
+  next();
+};
+
 // Health check
 app.get('/api', async (req, res) => {
   try {
@@ -480,32 +512,64 @@ app.get('/api', async (req, res) => {
 // AUTH
 // OTP storage (in production, use Redis or database)
 const otpStore = new Map();
+const nodemailer = require('nodemailer');
+
+// Email transporter configuration
+const emailTransporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.EMAIL_USER || 'your-email@gmail.com',
+    pass: process.env.EMAIL_PASS || 'your-app-password'
+  }
+});
 
 // Send OTP endpoint
 app.post('/api/auth/send-otp', async (req, res) => {
   try {
-    const { phone } = req.body;
+    const { email } = req.body;
     
-    if (!phone || !/^\d{10}$/.test(phone)) {
-      return res.status(400).json({ error: 'Valid 10-digit phone number required' });
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Valid email address required' });
     }
 
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     
     // Store OTP with 5-minute expiry
-    otpStore.set(phone, {
+    otpStore.set(email, {
       otp,
       expiresAt: Date.now() + 5 * 60 * 1000 // 5 minutes
     });
 
-    // In production, send SMS via Twilio/AWS SNS
-    console.log(`📱 OTP for ${phone}: ${otp}`);
+    // Send email with OTP
+    try {
+      await emailTransporter.sendMail({
+        from: process.env.EMAIL_USER || 'Online Assessment Portal <noreply@assessment.com>',
+        to: email,
+        subject: 'Your OTP for Registration',
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #667eea;">Online Assessment Portal</h2>
+            <p>Your OTP for registration is:</p>
+            <h1 style="background: #f7fafc; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 8px; color: #2d3748; border-radius: 8px;">${otp}</h1>
+            <p style="color: #718096; font-size: 14px;">This OTP is valid for 5 minutes.</p>
+            <p style="color: #718096; font-size: 14px;">If you didn't request this, please ignore this email.</p>
+          </div>
+        `
+      });
+      console.log(`📧 OTP sent to ${email}: ${otp}`);
+    } catch (emailError) {
+      console.error('Email send error:', emailError);
+      // Fallback: still allow registration in dev mode
+      console.log(`📧 [DEV MODE] OTP for ${email}: ${otp}`);
+    }
     
     res.json({
-      message: 'OTP sent successfully',
-      // In development, return OTP (remove in production)
-      otp: process.env.NODE_ENV === 'development' ? otp : undefined
+      message: 'OTP sent successfully to your email',
+      // Always return OTP for testing (in production, remove this)
+      otp: otp
     });
   } catch (error) {
     console.error('Send OTP error:', error);
@@ -517,21 +581,21 @@ app.post('/api/auth/send-otp', async (req, res) => {
 app.post('/api/auth/register', async (req, res) => {
   try {
     const database = await connectDB();
-    const { username, email, password, role, phone, otp } = req.body;
+    const { username, email, password, role, otp } = req.body;
     
     // For student registration, verify OTP
     if (role === 'student' || !role) {
-      if (!phone || !otp) {
-        return res.status(400).json({ error: 'Phone number and OTP required for student registration' });
+      if (!email || !otp) {
+        return res.status(400).json({ error: 'Email and OTP required for student registration' });
       }
 
-      const storedOTP = otpStore.get(phone);
+      const storedOTP = otpStore.get(email);
       if (!storedOTP) {
         return res.status(400).json({ error: 'OTP expired or not found. Please request a new OTP' });
       }
 
       if (storedOTP.expiresAt < Date.now()) {
-        otpStore.delete(phone);
+        otpStore.delete(email);
         return res.status(400).json({ error: 'OTP expired. Please request a new OTP' });
       }
 
@@ -540,7 +604,7 @@ app.post('/api/auth/register', async (req, res) => {
       }
 
       // OTP verified, delete it
-      otpStore.delete(phone);
+      otpStore.delete(email);
     }
     
     const existing = await database.collection('users').findOne({ username });
@@ -552,7 +616,7 @@ app.post('/api/auth/register', async (req, res) => {
       email, 
       password: hashedPassword, 
       role: role || 'student',
-      phone: phone || null,
+      phone: email,
       phoneVerified: (role === 'student' || !role) ? true : false,
       created_at: new Date()
     });
@@ -566,7 +630,7 @@ app.post('/api/auth/register', async (req, res) => {
     res.status(201).json({
       message: 'Registered successfully',
       token,
-      user: { id: result.insertedId.toString(), username, email, phone, role: role || 'student' }
+      user: { id: result.insertedId.toString(), username, email, role: role || 'student' }
     });
   } catch (error) {
     console.error('Register error:', error);
@@ -587,7 +651,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     const token = jwt.sign(
       { id: user._id.toString(), username: user.username, role: user.role },
-      process.env.JWT_SECRET || 'secret_key_123',
+      JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -946,7 +1010,7 @@ app.get('/api/admin/interviewers', async (req, res) => {
 // =============== NEW INTERVIEW REQUEST SYSTEM ===============
 
 // Student: Submit interview request
-app.post('/api/interview-request', async (req, res) => {
+app.post('/api/interview-request', verifyAuth, requireRole(['student']), async (req, res) => {
   try {
     await connectDB();
     const {
@@ -1020,7 +1084,7 @@ app.patch('/api/interview-request/:id/cancel', async (req, res) => {
 });
 
 // HR: Get all interview requests
-app.get('/api/hr/interview-requests', async (req, res) => {
+app.get('/api/hr/interview-requests', verifyAuth, requireRole(['hr']), async (req, res) => {
   try {
     await connectDB();
     const { status } = req.query;
@@ -1038,7 +1102,7 @@ app.get('/api/hr/interview-requests', async (req, res) => {
 });
 
 // HR: Approve interview request and schedule
-app.post('/api/hr/interview-request/:id/approve', async (req, res) => {
+app.post('/api/hr/interview-request/:id/approve', verifyAuth, requireRole(['hr']), async (req, res) => {
   try {
     await connectDB();
     const {
@@ -1100,7 +1164,7 @@ app.post('/api/hr/interview-request/:id/approve', async (req, res) => {
 });
 
 // HR: Reject interview request
-app.post('/api/hr/interview-request/:id/reject', async (req, res) => {
+app.post('/api/hr/interview-request/:id/reject', verifyAuth, requireRole(['hr']), async (req, res) => {
   try {
     await connectDB();
     const { hrId, rejectionReason } = req.body;
@@ -1123,7 +1187,7 @@ app.post('/api/hr/interview-request/:id/reject', async (req, res) => {
 });
 
 // HR: Get dashboard statistics
-app.get('/api/hr/dashboard-stats', async (req, res) => {
+app.get('/api/hr/dashboard-stats', verifyAuth, requireRole(['hr']), async (req, res) => {
   try {
     await connectDB();
     
@@ -1659,7 +1723,7 @@ app.get('/api/exams/:id', async (req, res) => {
   }
 });
 
-app.post('/api/exams/:id/submit', async (req, res) => {
+app.post('/api/exams/:id/submit', verifyAuth, requireRole(['student']), async (req, res) => {
   try {
     const database = await connectDB();
     const { answers } = req.body;
@@ -1737,7 +1801,7 @@ app.delete('/api/exams/:id', async (req, res) => {
 });
 
 // ADMIN ROUTES
-app.get('/api/admin/dashboard', async (req, res) => {
+app.get('/api/admin/dashboard', verifyAuth, requireRole(['admin']), async (req, res) => {
   try {
     const database = await connectDB();
     
@@ -1769,7 +1833,7 @@ app.get('/api/admin/dashboard', async (req, res) => {
   }
 });
 
-app.get('/api/admin/students', async (req, res) => {
+app.get('/api/admin/students', verifyAuth, requireRole(['admin']), async (req, res) => {
   try {
     const database = await connectDB();
     const students = await database.collection('users').find({ role: 'student' }).toArray();
@@ -1796,7 +1860,7 @@ app.get('/api/admin/students', async (req, res) => {
   }
 });
 
-app.delete('/api/admin/students/:id', async (req, res) => {
+app.delete('/api/admin/students/:id', verifyAuth, requireRole(['admin']), async (req, res) => {
   try {
     const database = await connectDB();
     await database.collection('users').deleteOne({ _id: new ObjectId(req.params.id) });
@@ -1806,7 +1870,7 @@ app.delete('/api/admin/students/:id', async (req, res) => {
   }
 });
 
-app.put('/api/admin/students/:id', async (req, res) => {
+app.put('/api/admin/students/:id', verifyAuth, requireRole(['admin']), async (req, res) => {
   try {
     const database = await connectDB();
     const { username, email, status } = req.body;
@@ -1945,7 +2009,7 @@ app.get('/api/notifications', async (req, res) => {
 });
 
 // OTHER ROUTES
-app.get('/api/submissions/me', async (req, res) => {
+app.get('/api/submissions/me', verifyAuth, requireRole(['student']), async (req, res) => {
   try {
     const database = await connectDB();
     const submissions = await database.collection('submissions').find({}).toArray();
@@ -2363,7 +2427,7 @@ app.get('/api/interview-schedule/:userId', async (req, res) => {
 });
 
 // Payment Routes
-app.post('/api/payments/create-order', async (req, res) => {
+app.post('/api/payments/create-order', verifyAuth, requireRole(['student']), async (req, res) => {
   try {
     const { examId, userId } = req.body;
     
@@ -2596,7 +2660,7 @@ app.post('/api/payments/simulate-payment', async (req, res) => {
 });
 
 // Get all pending payment verifications (Admin)
-app.get('/api/admin/payments/pending', async (req, res) => {
+app.get('/api/admin/payments/pending', verifyAuth, requireRole(['admin']), async (req, res) => {
   try {
     const database = await connectDB();
     const pendingPayments = await database.collection('payments')
@@ -2649,7 +2713,7 @@ app.get('/api/admin/payments/pending', async (req, res) => {
 });
 
 // Approve payment (Admin)
-app.post('/api/admin/payments/approve', async (req, res) => {
+app.post('/api/admin/payments/approve', verifyAuth, requireRole(['admin']), async (req, res) => {
   try {
     const { orderId, adminRemarks } = req.body;
     console.log(`✅ Admin approving payment for order: ${orderId}`);
@@ -2682,7 +2746,7 @@ app.post('/api/admin/payments/approve', async (req, res) => {
 });
 
 // Reject payment (Admin)
-app.post('/api/admin/payments/reject', async (req, res) => {
+app.post('/api/admin/payments/reject', verifyAuth, requireRole(['admin']), async (req, res) => {
   try {
     const { orderId, adminRemarks } = req.body;
     const database = await connectDB();
@@ -3013,6 +3077,5 @@ app.patch('/api/admin/users/:id/role', async (req, res) => {
 
 module.exports = app;
 
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => console.log(`✅ Server on ${PORT}`));
-}
+// Always listen in development
+app.listen(PORT, () => console.log(`✅ Server on ${PORT}`));

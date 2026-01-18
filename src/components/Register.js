@@ -31,22 +31,22 @@ function Register() {
       return;
     }
 
-    if (!/^\d{10}$/.test(formData.phone)) {
-      setError('Please enter a valid 10-digit phone number');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      setError('Please enter a valid email address');
       return;
     }
 
     setLoading(true);
 
     try {
-      const response = await api.post('/auth/send-otp', { phone: formData.phone });
-      setSuccess('OTP sent successfully to your phone!');
+      const response = await api.post('/auth/send-otp', { email: formData.email });
+      setSuccess('OTP sent successfully to your email!');
       setOtpSent(true);
       setStep(2);
       
       // In development, show OTP
       if (response.data.otp) {
-        setSuccess(`OTP sent! (Dev Mode: ${response.data.otp})`);
+        setSuccess(`OTP sent to ${formData.email}! (Dev: ${response.data.otp})`);
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to send OTP');
@@ -65,7 +65,6 @@ function Register() {
         username: formData.username,
         email: formData.email,
         password: formData.password,
-        phone: formData.phone,
         otp: formData.otp,
         role: formData.role
       });
@@ -123,18 +122,6 @@ function Register() {
           </div>
 
           <div className="form-group">
-            <label>Phone Number</label>
-            <input
-              type="tel"
-              placeholder="Enter 10-digit phone number"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-              required
-              maxLength="10"
-            />
-          </div>
-
-          <div className="form-group">
             <label>Password</label>
             <input
               type="password"
@@ -187,7 +174,7 @@ function Register() {
               style={{ fontSize: '20px', letterSpacing: '8px', textAlign: 'center' }}
             />
             <p style={{ fontSize: '13px', color: '#718096', marginTop: '8px' }}>
-              OTP sent to +91-{formData.phone}
+              OTP sent to {formData.email}
             </p>
           </div>
 

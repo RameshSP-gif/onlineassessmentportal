@@ -8,35 +8,87 @@ function Dashboard() {
   const [user, setUser] = useState(null);
   const [stats, setStats] = useState({ exams: 0, submissions: 0, interviews: 0 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [retrying, setRetrying] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user'));
+    if (!userData) {
+      navigate('/login');
+      return;
+    }
     setUser(userData);
     loadStats();
-  }, []);
+  }, [navigate]);
 
-  const loadStats = async () => {
+  const loadStats = async (retry = 0) => {
     try {
+      setError(null);
+      setLoading(true);
+      
       const [examsRes, submissionsRes, interviewsRes] = await Promise.all([
-        exams.getAll(),
-        submissions.getMine(),
-        interviews.getMine()
+        exams.getAll().catch(err => {
+          console.error('Failed to load exams:', err);
+          throw err;
+        }),
+        submissions.getMine().catch(err => {
+          console.error('Failed to load submissions:', err);
+          throw err;
+        }),
+        interviews.getMine().catch(err => {
+          console.error('Failed to load interviews:', err);
+          throw err;
+        })
       ]);
+      
       setStats({
-        exams: examsRes.data.length,
-        submissions: submissionsRes.data.length,
-        interviews: interviewsRes.data.length
+        exams: Array.isArray(examsRes.data) ? examsRes.data.length : 0,
+        submissions: Array.isArray(submissionsRes.data) ? submissionsRes.data.length : 0,
+        interviews: Array.isArray(interviewsRes.data) ? interviewsRes.data.length : 0
       });
+      setError(null);
     } catch (error) {
-      console.error('Error loading stats:', error);
+      console.error('Error loading dashboard stats:', error);
+      
+      // Retry logic for network errors
+      if (!error.response && retry < 2) {
+        setTimeout(() => {
+          setRetrying(true);
+          loadStats(retry + 1).finally(() => setRetrying(false));
+        }, 2000);
+      } else {
+        setError(
+          error.response?.data?.error || 
+          'Failed to load dashboard. Please refresh the page.'
+        );
+        setStats({ exams: 0, submissions: 0, interviews: 0 });
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
+  const handleRetry = () => {
+    loadStats();
+  };
+
+  if (loading && !retrying) {
     return <Layout><div className="loading">Loading dashboard...</div></Layout>;
+  }
+
+  if (error && !retrying) {
+    return (
+      <Layout>
+        <div className="error-container" style={{ padding: '20px', textAlign: 'center' }}>
+          <h2>⚠️ Error Loading Dashboard</h2>
+          <p>{error}</p>
+          <button onClick={handleRetry} className="btn btn-primary">
+            🔄 Retry
+          </button>
+        </div>
+      </Layout>
+    );
   }
 
   return (

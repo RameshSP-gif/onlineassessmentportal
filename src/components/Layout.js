@@ -25,18 +25,18 @@ function Layout({ children }) {
           { path: '/admin/students', icon: '👥', label: 'Manage Students' },
           { path: '/admin/users', icon: '👤', label: 'User Management' },
           { path: '/admin/roles', icon: '🔑', label: 'Role Management' },
-          { path: '/admin/payments', icon: '💳', label: 'Exam Payment Approvals' },
-          { path: '/admin/interview-payments', icon: '🎤', label: 'Interview Payment Approvals' },
-          { path: '/admin/results', icon: '📊', label: 'Reports & Analytics' }
+          { path: '/admin/payments', icon: '💳', label: 'Exam Payments' },
+          { path: '/admin/interview-payments', icon: '🎤', label: 'Interview Payments' },
+          { path: '/admin/fees', icon: '💰', label: 'Fee Management' },
+          { path: '/admin/submissions', icon: '📋', label: 'Exam Submissions' },
+          { path: '/admin/reports', icon: '📊', label: 'Reports' },
+          { path: '/admin/notifications', icon: '🔔', label: 'Notifications' }
         ];
       
       case 'hr':
         return [
           { path: '/hr/dashboard', icon: '🏠', label: 'HR Dashboard' },
-          { path: '/hr/interview-requests', icon: '📋', label: 'Interview Requests' },
-          { path: '/hr/schedule', icon: '📅', label: 'Interview Schedule' },
-          { path: '/hr/candidates', icon: '👥', label: 'Manage Candidates' },
-          { path: '/hr/reports', icon: '📊', label: 'HR Reports' }
+          { path: '/hr/interview-requests', icon: '📋', label: 'Interview Requests' }
         ];
       
       case 'interviewer':
@@ -44,8 +44,7 @@ function Layout({ children }) {
           { path: '/interviewer/dashboard', icon: '🏠', label: 'Interviewer Dashboard' },
           { path: '/interviewer/schedule', icon: '📅', label: 'My Schedule' },
           { path: '/interviewer/interviews', icon: '🎤', label: 'Conduct Interviews' },
-          { path: '/interviewer/reviews', icon: '📝', label: 'Interview Reviews' },
-          { path: '/interviewer/availability', icon: '🕒', label: 'Set Availability' }
+          { path: '/interviewer/reviews', icon: '📝', label: 'Interview Reviews' }
         ];
       
       case 'student':
@@ -53,9 +52,10 @@ function Layout({ children }) {
         return [
           { path: '/dashboard', icon: '🏠', label: 'Student Dashboard' },
           { path: '/exams', icon: '📝', label: 'Browse Exams' },
-          { path: '/payment-status', icon: '💰', label: 'Exam Payments & Take Test' },
+          { path: '/payment-status', icon: '💰', label: 'Exam Payments' },
           { path: '/interviews', icon: '🎤', label: 'Browse Interviews' },
-          { path: '/interview-status', icon: '💳', label: 'Interview Payments & Schedule' },
+          { path: '/interview-status', icon: '💳', label: 'Interview Payments' },
+          { path: '/interview-requests', icon: '📋', label: 'Interview Requests' },
           { path: '/results', icon: '📊', label: 'My Results' }
         ];
     }

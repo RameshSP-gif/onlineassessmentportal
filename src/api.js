@@ -4,8 +4,10 @@ const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 30000, // 30 second timeout
 });
 
+// Request interceptor - add token to all requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -13,6 +15,44 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Response interceptor - handle errors consistently
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Handle different error scenarios
+    if (error.response) {
+      // Server responded with error status
+      const status = error.response.status;
+      const data = error.response.data;
+      
+      if (status === 401) {
+        // Unauthorized - clear token and redirect to login
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      } else if (status === 403) {
+        // Forbidden - access denied
+        console.error('Access denied:', data.error);
+      } else if (status === 404) {
+        // Not found
+        console.error('Resource not found:', data.error);
+      } else if (status === 500) {
+        // Server error
+        console.error('Server error:', data.error);
+      }
+    } else if (error.request) {
+      // Request made but no response (network error)
+      console.error('Network error - no response from server');
+      error.message = 'Network error: Unable to reach the server. Please check your connection.';
+    } else {
+      // Error in request setup
+      console.error('Request error:', error.message);
+    }
+    
+    return Promise.reject(error);
+  }
+);
 
 export const auth = {
   register: (data) => api.post('/auth/register', data),

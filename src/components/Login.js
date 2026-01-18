@@ -15,18 +15,46 @@ function Login() {
     setLoading(true);
 
     try {
+      if (!formData.username || !formData.password) {
+        setError('Please enter both username and password');
+        setLoading(false);
+        return;
+      }
+
       const response = await auth.login(formData);
+      
+      if (!response.data.token) {
+        setError('Login failed: No token received');
+        setLoading(false);
+        return;
+      }
+
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       
-      // Redirect admin to admin dashboard
+      // Redirect admin to admin dashboard, others to student dashboard
       if (response.data.user.role === 'admin') {
         navigate('/admin/dashboard');
+      } else if (response.data.user.role === 'hr') {
+        navigate('/hr/dashboard');
+      } else if (response.data.user.role === 'interviewer') {
+        navigate('/interviewer/dashboard');
       } else {
         navigate('/dashboard');
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed');
+      console.error('Login error:', err);
+      
+      // Provide user-friendly error messages
+      if (err.response?.status === 401) {
+        setError('Invalid username or password');
+      } else if (err.response?.status === 429) {
+        setError('Too many login attempts. Please try again later.');
+      } else if (!err.response) {
+        setError('Connection error: Unable to reach the server. Is the backend running?');
+      } else {
+        setError(err.response?.data?.error || 'Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
