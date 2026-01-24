@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import './StudentInterviewRequests.css';
@@ -6,33 +6,73 @@ import './StudentInterviewRequests.css';
 function StudentInterviewRequests() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [scheduling, setScheduling] = useState(null);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
   const navigate = useNavigate();
   
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-  useEffect(() => {
-    loadRequests();
-  }, []);
+  const loadRequests = useCallback(async () => {
+    if (!user?.id) {
+      setRequests([]);
+      setLoading(false);
+      return;
+    }
 
-  const loadRequests = async () => {
     try {
-      const response = await api.get(`/student/${user.id}/interview-requests`);
+      const response = await api.get(`/interview-requests/student/${user.id}`);
       setRequests(response.data);
     } catch (error) {
       console.error('Failed to load requests:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user.id]);
+
+  useEffect(() => {
+    loadRequests();
+    const interval = setInterval(loadRequests, 30000); // Refresh every 30s
+    return () => clearInterval(interval);
+  }, [loadRequests]);
 
   const handleCancel = async (requestId) => {
     if (window.confirm('Are you sure you want to cancel this interview request?')) {
       try {
-        await api.patch(`/interview-request/${requestId}/cancel`);
+        await api.patch(`/interview-requests/${requestId}/cancel`);
         loadRequests();
       } catch (error) {
         alert('Failed to cancel request');
       }
+    }
+  };
+
+  const handleScheduleClick = (requestId) => {
+    setScheduling(requestId);
+    setScheduleDate('');
+    setScheduleTime('');
+  };
+
+  const handleSubmitSchedule = async (requestId) => {
+    if (!scheduleDate || !scheduleTime) {
+      alert('Please select both date and time');
+      return;
+    }
+    setScheduleSubmitting(true);
+    try {
+      await api.patch(`/interview-requests/${requestId}/schedule`, {
+        proposedDate: scheduleDate,
+        proposedTime: scheduleTime
+      });
+      setScheduling(null);
+      setScheduleDate('');
+      setScheduleTime('');
+      loadRequests();
+    } catch (error) {
+      alert('Failed to schedule: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setScheduleSubmitting(false);
     }
   };
 
@@ -66,6 +106,8 @@ function StudentInterviewRequests() {
     );
   }
 
+  const scheduledRequests = requests.filter((r) => r.status === 'scheduled');
+
   return (
     <div className="student-requests-container">
       <div className="requests-header">
@@ -76,17 +118,58 @@ function StudentInterviewRequests() {
           <h1>My Interview Requests</h1>
           <p className="subtitle">Track and manage your interview applications</p>
         </div>
-        <button className="btn-new-request" onClick={() => navigate('/schedule-interview')}>
+        <button className="btn-new-request" onClick={() => navigate('/interview-list')}>
           + New Interview Request
         </button>
       </div>
+
+      {scheduledRequests.length > 0 && (
+        <div className="scheduled-summary">
+          <h2>📅 Scheduled Interviews</h2>
+          <div className="requests-grid">
+            {scheduledRequests.map((request) => (
+              <div key={request._id || request.id} className="request-card scheduled-card">
+                <div className="card-header">
+                  <div className="interview-type-badge">
+                    {request.interviewType === 'human' ? '👨‍💼 Human' : '🤖 AI'}
+                  </div>
+                  <span className="status-badge status-scheduled">📅 Scheduled</span>
+                </div>
+                <div className="card-body">
+                  <h3>{request.specialization || request.courseName}</h3>
+                  <div className="info-row">
+                    <span className="label">When:</span>
+                    <span className="value">{formatDate(request.scheduledDate || request.proposedDate)}</span>
+                  </div>
+                  {request.scheduledTimeSlot && (
+                    <div className="info-row">
+                      <span className="label">Time:</span>
+                      <span className="value">{request.scheduledTimeSlot}</span>
+                    </div>
+                  )}
+                  {request.meetingLink && (
+                    <a 
+                      href={request.meetingLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="meeting-link"
+                    >
+                      🔗 Join Meeting
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {requests.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon">📋</div>
           <h3>No Interview Requests Yet</h3>
           <p>Start by scheduling your first interview</p>
-          <button className="btn-primary" onClick={() => navigate('/schedule-interview')}>
+          <button className="btn-primary" onClick={() => navigate('/interview-list')}>
             Schedule Interview
           </button>
         </div>
@@ -191,6 +274,44 @@ function StudentInterviewRequests() {
                     >
                       Cancel Request
                     </button>
+                  )}
+                  {request.status === 'approved' && scheduling !== request._id && (
+                    <button 
+                      className="btn-schedule"
+                      onClick={() => handleScheduleClick(request._id)}
+                    >
+                      📅 Schedule Interview
+                    </button>
+                  )}
+                  {scheduling === request._id && (
+                    <div className="schedule-form">
+                      <input
+                        type="date"
+                        value={scheduleDate}
+                        onChange={(e) => setScheduleDate(e.target.value)}
+                        className="schedule-input"
+                        min={new Date().toISOString().split('T')[0]}
+                      />
+                      <input
+                        type="time"
+                        value={scheduleTime}
+                        onChange={(e) => setScheduleTime(e.target.value)}
+                        className="schedule-input"
+                      />
+                      <button
+                        className="btn-confirm"
+                        onClick={() => handleSubmitSchedule(request._id)}
+                        disabled={scheduleSubmitting}
+                      >
+                        {scheduleSubmitting ? '⏳ Scheduling...' : '✅ Confirm'}
+                      </button>
+                      <button
+                        className="btn-cancel-form"
+                        onClick={() => setScheduling(null)}
+                      >
+                        ❌ Cancel
+                      </button>
+                    </div>
                   )}
                   {request.status === 'scheduled' && (
                     <button 

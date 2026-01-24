@@ -5,7 +5,7 @@ import './AdminPaymentVerification.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
 
-function AdminPaymentVerification() {
+function HRPaymentVerification() {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(null);
@@ -224,4 +224,4 @@ function AdminPaymentVerification() {
   );
 }
 
-export default AdminPaymentVerification;
+export default HRPaymentVerification;

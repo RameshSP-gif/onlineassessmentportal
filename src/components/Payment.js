@@ -18,6 +18,13 @@ function Payment() {
   const [screenshotPreview, setScreenshotPreview] = useState('');
 
   useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('user'));
+    if (!user) {
+      setError('Please login to continue payment.');
+      navigate('/login');
+      return;
+    }
+
     checkPaymentStatus();
     loadExam();
     initializePayment();
@@ -33,6 +40,10 @@ function Payment() {
   const initializePayment = async () => {
     try {
       const user = JSON.parse(localStorage.getItem('user'));
+      if (!user) {
+        setError('Please login to continue payment.');
+        return;
+      }
       const orderResponse = await api.post('/payments/create-order', {
         examId,
         userId: user.id
@@ -40,7 +51,14 @@ function Payment() {
       setCurrentOrderId(orderResponse.data.orderId);
     } catch (error) {
       console.error('Error creating order:', error);
-      // Silent initialization - no need to show error
+      const msg = error.response?.data?.error || error.message || 'Failed to initialize payment.';
+      setError(msg);
+      if (msg?.toLowerCase()?.includes('already completed')) {
+        navigate(`/take-exam/${examId}`);
+      }
+      if (error.response?.status === 401) {
+        navigate('/login');
+      }
     }
   };
 
@@ -64,6 +82,19 @@ function Payment() {
       if (response.data.paid) {
         // Already paid, redirect to exam
         navigate(`/take-exam/${examId}`);
+        return;
+      }
+
+      // If there is an existing pending/pending_verification order, reuse its orderId so submit button enables
+      if (response.data.orderId) {
+        setCurrentOrderId(response.data.orderId);
+      }
+
+      if (response.data.status === 'pending_verification') {
+        setPaymentMessage('⏳ Payment proof received. Waiting for admin verification...');
+        startAdminApprovalPolling(response.data.orderId);
+      } else if (response.data.status === 'pending') {
+        setPaymentMessage('⏳ Order created. Please upload your payment screenshot to submit for verification.');
       }
     } catch (error) {
       console.error('Error checking payment:', error);
@@ -82,7 +113,6 @@ function Payment() {
     }
     
     setProcessing(true);
-    setError('');
     setPaymentMessage('📤 Uploading payment proof...');
     
     try {
@@ -109,14 +139,15 @@ function Payment() {
       
       if (uploadResponse.data.success) {
         // Show success message
-        setPaymentMessage('✅ Payment proof submitted successfully! Admin will verify & approve within 5 minutes.');
+        setPaymentMessage('✅ Payment proof submitted successfully! Redirecting...');
         
         // Show browser alert for confirmation
-        alert('✅ Success!\n\nYour payment proof has been submitted for verification.\n\nAdmin will review and approve within 5 minutes.\n\nYou will be automatically redirected once approved.');
+        alert('✅ Payment Submitted!\n\nYour payment proof has been received.\n\nYou can now access the exam.\n\nAdmin will verify offline.');
         
-        // Keep processing true while waiting for approval
-        // Start polling for admin approval
-        startAdminApprovalPolling(currentOrderId);
+        // Redirect immediately to student dashboard
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 1500);
       } else {
         throw new Error('Upload failed');
       }
@@ -149,6 +180,8 @@ function Payment() {
           setPaymentMessage('❌ Payment rejected. Please contact support or try again.');
           setProcessing(false);
           alert('❌ Payment Rejected\n\nYour payment proof was rejected.\n\nPlease contact support or submit again with correct details.');
+        } else if (response.data.status === 'pending') {
+          setPaymentMessage('⏳ Payment proof received. Waiting for admin verification...');
         }
       } catch (error) {
         console.error('Polling error:', error);
@@ -214,9 +247,10 @@ function Payment() {
             <h3>Scan & Pay ₹200</h3>
             <div className="qr-image-container">
               <img 
-                src="/phonepe-qr.jpg" 
+                src="/phonepe-qr.jpg"
                 alt="UPI Payment QR Code"
                 className="qr-image"
+                onError={() => setError('Unable to load QR image. Please refresh or contact support.')}
               />
             </div>
             <p className="merchant-info">Pay to: RAMESH S P</p>

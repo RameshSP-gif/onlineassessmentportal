@@ -7,84 +7,31 @@ const mongoose = require('mongoose');
 const { ObjectId } = require('mongodb');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
-
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = 'uploads/payment-proofs';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'payment-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: function (req, file, cb) {
-    const allowedTypes = /jpeg|jpg|png|gif|pdf/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Only images (JPEG, PNG, GIF) and PDF files are allowed!'));
-    }
-  }
-});
-
-const app = express();
-const PORT = process.env.PORT || 5005;
-
-// MongoDB Atlas connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://root:Rakshita%401234@cluster0.pp8rwbt.mongodb.net/assessmentdb?retryWrites=true&w=majority';
-
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://rameshsedol:Ramesh@cluster0.pp8rwbt.mongodb.net/';
+const upload = multer({ dest: 'uploads/' });
 let db = null;
 let isConnecting = false;
 let connectionPromise = null;
-
-// MongoDB Schema Models for Interviewers
+const app = express();
+const PORT = process.env.PORT || 3002;
+// Schemas
 const InterviewerSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
-  email: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  fullName: { type: String, required: true },
-  specialization: { type: String }, // e.g., "Java", "Python", "MERN"
-  experience: { type: Number }, // years of experience
-  bio: { type: String },
-  rating: { type: Number, default: 0 },
-  totalInterviews: { type: Number, default: 0 },
+  fullName: { type: String },
+  expertise: [{ type: String }],
   availability: [{
     day: String,
-    timeSlots: [{ start: String, end: String }]
+    slots: [{ start: String, end: String }]
   }],
-  isAvailable: { type: Boolean, default: true },
   role: { type: String, default: 'interviewer' },
-  created_at: { type: Date, default: Date.now }
+  created_at: { type: Date, default: Date.now },
+  updated_at: { type: Date, default: Date.now }
 });
 
-// Interview Request Schema - Student requests, HR approves
 const InterviewRequestSchema = new mongoose.Schema({
-  studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  studentName: { type: String, required: true },
-  studentEmail: { type: String, required: true },
-  interviewType: { 
-    type: String, 
-    enum: ['human', 'ai'],
-    required: true 
-  },
-  interviewMode: { 
-    type: String, 
-    enum: ['online', 'f2f', 'n/a'],
-    default: 'online'
-  },
-  specialization: { type: String, required: true },
+// (Legacy HR endpoints removed; HR now uses unified /api/interview-requests*)
   proposedDates: [{
     date: { type: Date, required: true },
     timeSlot: { type: String, required: true }, // e.g., "10:00 AM - 11:00 AM"
@@ -191,7 +138,7 @@ async function connectDB() {
     return connectionPromise;
   }
   
-  // Start new connection
+  // Start new connection with retry logic
   isConnecting = true;
   connectionPromise = (async () => {
     try {
@@ -1452,6 +1399,37 @@ app.patch('/api/interview-request/:id/cancel', async (req, res) => {
   }
 });
 
+// Student: Schedule interview for approved request
+app.patch('/api/interview-request/:id/schedule', async (req, res) => {
+  try {
+    await connectDB();
+    const { proposedDate, proposedTime } = req.body;
+
+    if (!proposedDate || !proposedTime) {
+      return res.status(400).json({ error: 'Date and time are required' });
+    }
+
+    const request = await InterviewRequest.findByIdAndUpdate(
+      req.params.id,
+      { 
+        status: 'scheduled',
+        scheduledDate: new Date(proposedDate),
+        scheduledTimeSlot: proposedTime,
+        updated_at: new Date()
+      },
+      { new: true }
+    );
+
+    if (!request) {
+      return res.status(404).json({ error: 'Interview request not found' });
+    }
+    
+    res.json(request);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // HR: Get all interview requests
 app.get('/api/hr/interview-requests', verifyAuth, requireRole(['hr']), async (req, res) => {
   try {
@@ -1476,12 +1454,7 @@ app.post('/api/hr/interview-request/:id/approve', verifyAuth, requireRole(['hr']
     await connectDB();
     const {
       hrId,
-      hrComments,
-      assignedInterviewerId,
-      scheduledDate,
-      scheduledTimeSlot,
-      meetingLink,
-      location
+      hrComments
     } = req.body;
 
     const request = await InterviewRequest.findById(req.params.id);
@@ -1489,42 +1462,17 @@ app.post('/api/hr/interview-request/:id/approve', verifyAuth, requireRole(['hr']
       return res.status(404).json({ error: 'Request not found' });
     }
 
-    // Update request
+    // Update request to approved status
     request.status = 'approved';
     request.hrId = hrId;
     request.hrComments = hrComments;
-    request.assignedInterviewerId = assignedInterviewerId;
-    request.scheduledDate = new Date(scheduledDate);
-    request.scheduledTimeSlot = scheduledTimeSlot;
-    request.meetingLink = meetingLink;
-    request.location = location;
     request.updated_at = new Date();
     
     await request.save();
 
-    // Create interview session
-    const session = new InterviewSession({
-      requestId: request._id,
-      studentId: request.studentId,
-      interviewerId: assignedInterviewerId,
-      interviewType: request.interviewType,
-      interviewMode: request.interviewMode,
-      scheduledAt: new Date(scheduledDate),
-      status: 'scheduled',
-      meetingLink,
-      location
-    });
-
-    await session.save();
-
-    // Update request status to scheduled
-    request.status = 'scheduled';
-    await request.save();
-
     res.json({
-      message: 'Interview approved and scheduled',
-      request,
-      session
+      message: 'Interview approved successfully',
+      request
     });
   } catch (error) {
     console.error('Approval error:', error);
@@ -1536,13 +1484,12 @@ app.post('/api/hr/interview-request/:id/approve', verifyAuth, requireRole(['hr']
 app.post('/api/hr/interview-request/:id/reject', verifyAuth, requireRole(['hr']), async (req, res) => {
   try {
     await connectDB();
-    const { hrId, rejectionReason } = req.body;
+    const { rejectionReason } = req.body;
 
     const request = await InterviewRequest.findByIdAndUpdate(
       req.params.id,
       { 
         status: 'rejected',
-        hrId,
         rejectionReason,
         updated_at: new Date()
       },
@@ -1582,6 +1529,55 @@ app.get('/api/hr/dashboard-stats', verifyAuth, requireRole(['hr']), async (req, 
       recentRequests
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// HR: Get all exam results for all students
+app.get('/api/hr/exam-results', verifyAuth, requireRole(['hr']), async (req, res) => {
+  try {
+    const database = await connectDB();
+    
+    // Get all submissions with exam and student details
+    const submissions = await database.collection('submissions')
+      .aggregate([
+        {
+          $lookup: {
+            from: 'exams',
+            localField: 'exam_id',
+            foreignField: '_id',
+            as: 'exam'
+          }
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'user_id',
+            foreignField: '_id',
+            as: 'user'
+          }
+        },
+        { $sort: { submitted_at: -1 } }
+      ])
+      .toArray();
+    
+    // Format the results for display
+    const formattedResults = submissions.map(sub => ({
+      id: sub._id.toString(),
+      exam_id: sub.exam_id.toString(),
+      user_id: sub.user_id.toString(),
+      score: sub.score || 0,
+      total_marks: sub.exam && sub.exam.length > 0 ? sub.exam[0].total_marks : 10,
+      exam_title: sub.exam && sub.exam.length > 0 ? sub.exam[0].title : 'Unknown Exam',
+      student_name: sub.user && sub.user.length > 0 ? sub.user[0].username : 'Unknown Student',
+      student_email: sub.user && sub.user.length > 0 ? sub.user[0].email : 'unknown@example.com',
+      submitted_at: sub.submitted_at,
+      answers: sub.answers
+    }));
+    
+    res.json(formattedResults);
+  } catch (error) {
+    console.error('Error fetching exam results:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -2170,7 +2166,7 @@ app.delete('/api/exams/:id', async (req, res) => {
 });
 
 // ADMIN ROUTES
-app.get('/api/admin/dashboard', verifyAuth, requireRole(['admin']), async (req, res) => {
+app.get('/api/admin/dashboard', verifyAuth, requireRole(['hr']), async (req, res) => {
   try {
     const database = await connectDB();
     
@@ -2202,7 +2198,7 @@ app.get('/api/admin/dashboard', verifyAuth, requireRole(['admin']), async (req, 
   }
 });
 
-app.get('/api/admin/students', verifyAuth, requireRole(['admin']), async (req, res) => {
+app.get('/api/admin/students', verifyAuth, requireRole(['hr']), async (req, res) => {
   try {
     const database = await connectDB();
     const students = await database.collection('users').find({ role: 'student' }).toArray();
@@ -2229,7 +2225,7 @@ app.get('/api/admin/students', verifyAuth, requireRole(['admin']), async (req, r
   }
 });
 
-app.delete('/api/admin/students/:id', verifyAuth, requireRole(['admin']), async (req, res) => {
+app.delete('/api/admin/students/:id', verifyAuth, requireRole(['hr']), async (req, res) => {
   try {
     const database = await connectDB();
     await database.collection('users').deleteOne({ _id: new ObjectId(req.params.id) });
@@ -2239,7 +2235,7 @@ app.delete('/api/admin/students/:id', verifyAuth, requireRole(['admin']), async 
   }
 });
 
-app.put('/api/admin/students/:id', verifyAuth, requireRole(['admin']), async (req, res) => {
+app.put('/api/admin/students/:id', verifyAuth, requireRole(['hr']), async (req, res) => {
   try {
     const database = await connectDB();
     const { username, email, status } = req.body;
@@ -2380,31 +2376,9 @@ app.get('/api/notifications', async (req, res) => {
 // OTHER ROUTES
 app.get('/api/submissions/me', verifyAuth, requireRole(['student']), async (req, res) => {
   try {
-    const database = await connectDB();
-    // Get submissions sorted by submitted_at in descending order (latest first)
-    const submissions = await database.collection('submissions')
-      .find({})
-      .sort({ submitted_at: -1 })
-      .toArray();
-    
-    // Enrich submissions with exam details and calculated percentage
-    const enrichedSubmissions = await Promise.all(submissions.map(async (sub) => {
-      const exam = await database.collection('exams').findOne({ _id: sub.exam_id });
-      const totalMarks = exam ? exam.total_marks : 10;
-      
-      return {
-        id: sub._id.toString(),
-        _id: sub._id.toString(),
-        title: exam ? exam.title : 'Unknown Exam',
-        score: sub.score || 0,
-        total_marks: totalMarks,
-        percentage: Math.round(((sub.score || 0) / totalMarks) * 100),
-        submitted_at: sub.submitted_at,
-        exam_id: sub.exam_id.toString()
-      };
-    }));
-    
-    res.json(enrichedSubmissions);
+    // Students cannot view their own results
+    // Results are only visible to HR personnel
+    res.json([]);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2463,13 +2437,9 @@ app.post('/api/interviews/submit', async (req, res) => {
 
 app.get('/api/interviews/me', async (req, res) => {
   try {
-    const database = await connectDB();
-    // Sort by created_at in descending order (latest first)
-    const interviews = await database.collection('interviews')
-      .find({})
-      .sort({ created_at: -1 })
-      .toArray();
-    res.json(interviews);
+    // Students cannot view their own interview results
+    // Results are only visible to HR/Interviewers
+    res.json([]);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2572,8 +2542,13 @@ app.post('/api/interview-payments/create-order', async (req, res) => {
 
 app.post('/api/interview-payments/upload-screenshot', upload.single('screenshot'), async (req, res) => {
   try {
-    const { orderId, courseId, userId } = req.body;
-    const screenshot = req.file ? `/uploads/payment-proofs/${req.file.filename}` : null;
+    const { orderId, courseId, userId, screenshot: base64Screenshot } = req.body;
+    let screenshot = req.file ? `/uploads/payment-proofs/${req.file.filename}` : null;
+    
+    // Support both file upload and base64 data
+    if (!screenshot && base64Screenshot) {
+      screenshot = base64Screenshot; // Store base64 directly for testing
+    }
     
     if (!screenshot) {
       return res.status(400).json({ error: 'Screenshot is required' });
@@ -2612,16 +2587,22 @@ app.get('/api/interview-payments/status/:courseId/:userId', async (req, res) => 
     console.log(`🔍 Checking interview payment - CourseID: ${courseId}, UserID: ${userId}`);
     
     const database = await connectDB();
-    const payment = await database.collection('interview_payments').findOne({
+    
+    // Try to find the payment
+    const query = {
       course_id: new ObjectId(courseId),
       user_id: userId
-    });
+    };
+    console.log(`📋 Query:`, JSON.stringify(query, null, 2));
+    
+    const payment = await database.collection('interview_payments').findOne(query);
     
     console.log(`💳 Interview Payment:`, payment ? {
       order_id: payment.order_id,
       status: payment.status,
-      user_id: payment.user_id
-    } : 'No payment record');
+      user_id: payment.user_id,
+      _id: payment._id.toString()
+    } : 'No payment record found');
     
     if (payment) {
       res.json({ 
@@ -2651,8 +2632,8 @@ app.get('/api/interview-payments/status/:courseId/:userId', async (req, res) => 
   }
 });
 
-// Admin Interview Payment Approval
-app.get('/api/admin/interview-payments/pending', async (req, res) => {
+// HR Interview Payment Approval
+app.get('/api/hr/interview-payments/pending', async (req, res) => {
   try {
     const database = await connectDB();
     const payments = await database.collection('interview_payments')
@@ -2690,7 +2671,7 @@ app.get('/api/admin/interview-payments/pending', async (req, res) => {
   }
 });
 
-app.post('/api/admin/interview-payments/approve', async (req, res) => {
+app.post('/api/hr/interview-payments/approve', async (req, res) => {
   try {
     const { orderId } = req.body;
     console.log(`✅ Admin approving interview payment: ${orderId}`);
@@ -2724,7 +2705,7 @@ app.post('/api/admin/interview-payments/approve', async (req, res) => {
   }
 });
 
-app.post('/api/admin/interview-payments/reject', async (req, res) => {
+app.post('/api/hr/interview-payments/reject', async (req, res) => {
   try {
     const { orderId, reason } = req.body;
     
@@ -2981,7 +2962,7 @@ app.post('/api/payments/upload-screenshot', upload.single('screenshot'), async (
     const database = await connectDB();
     const screenshotPath = req.file.path;
     
-    await database.collection('payments').updateOne(
+    const result = await database.collection('payments').updateOne(
       { order_id: orderId },
       { 
         $set: { 
@@ -2994,7 +2975,28 @@ app.post('/api/payments/upload-screenshot', upload.single('screenshot'), async (
       }
     );
     
-    console.log(`📸 Screenshot uploaded for order: ${orderId}`);
+    if (result.matchedCount === 0) {
+      if (!examId || !userId || !orderId) {
+        return res.status(404).json({ error: 'Payment order not found and insufficient data to create one' });
+      }
+      await database.collection('payments').insertOne({
+        exam_id: new ObjectId(examId),
+        user_id: userId,
+        order_id: orderId,
+        amount: 200,
+        currency: 'INR',
+        status: 'pending_verification',
+        screenshot: screenshotPath,
+        transaction_id: transactionId,
+        upi_id: upiId,
+        created_at: new Date(),
+        uploaded_at: new Date()
+      });
+      console.log(`📸 Screenshot uploaded and payment record created for order: ${orderId}`);
+    } else {
+      console.log(`📸 Screenshot uploaded for existing order: ${orderId}`);
+    }
+    
     res.json({ 
       success: true, 
       message: 'Screenshot uploaded successfully. Awaiting admin verification.',
@@ -3041,7 +3043,7 @@ app.post('/api/payments/simulate-payment', async (req, res) => {
 });
 
 // Get all pending payment verifications (Admin)
-app.get('/api/admin/payments/pending', verifyAuth, requireRole(['admin']), async (req, res) => {
+app.get('/api/admin/payments/pending', verifyAuth, requireRole(['hr']), async (req, res) => {
   try {
     const database = await connectDB();
     const pendingPayments = await database.collection('payments')
@@ -3049,7 +3051,9 @@ app.get('/api/admin/payments/pending', verifyAuth, requireRole(['admin']), async
         { $match: { status: 'pending_verification' } },
         {
           $addFields: {
-            exam_id_obj: { $toObjectId: '$exam_id' },
+            // exam_id is already stored as ObjectId during order creation
+            exam_id_obj: '$exam_id',
+            // user_id is stored as string; convert to ObjectId for lookup
             user_id_obj: { $toObjectId: '$user_id' }
           }
         },
@@ -3094,7 +3098,7 @@ app.get('/api/admin/payments/pending', verifyAuth, requireRole(['admin']), async
 });
 
 // Approve payment (Admin)
-app.post('/api/admin/payments/approve', verifyAuth, requireRole(['admin']), async (req, res) => {
+app.post('/api/admin/payments/approve', verifyAuth, requireRole(['hr']), async (req, res) => {
   try {
     const { orderId, adminRemarks } = req.body;
     console.log(`✅ Admin approving payment for order: ${orderId}`);
@@ -3127,7 +3131,7 @@ app.post('/api/admin/payments/approve', verifyAuth, requireRole(['admin']), asyn
 });
 
 // Reject payment (Admin)
-app.post('/api/admin/payments/reject', verifyAuth, requireRole(['admin']), async (req, res) => {
+app.post('/api/admin/payments/reject', verifyAuth, requireRole(['hr']), async (req, res) => {
   try {
     const { orderId, adminRemarks } = req.body;
     const database = await connectDB();
@@ -3456,7 +3460,313 @@ app.patch('/api/admin/users/:id/role', async (req, res) => {
   }
 });
 
+// ===================== NEW: Student Interview Scheduling Flow =====================
+
+// Student: Create interview request after payment approval
+app.post('/api/interview-requests', verifyAuth, async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { courseId, proposedDate, proposedTime, notes } = req.body;
+    const userId = req.user.id;
+
+    // Get course details
+    const course = await database.collection('interview_courses').findOne({
+      _id: new ObjectId(courseId)
+    });
+
+    if (!course) {
+      return res.status(404).json({ error: 'Interview course not found' });
+    }
+
+    // Create interview request
+    const request = {
+      courseId: new ObjectId(courseId),
+      userId: new ObjectId(userId),
+      studentName: req.user.fullName || req.user.username,
+      studentEmail: req.user.email,
+      courseName: course.title,
+      proposedDate: new Date(proposedDate),
+      proposedTime: proposedTime,
+      notes: notes || '',
+      status: 'pending',
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+
+    const result = await database.collection('interview_requests').insertOne(request);
+
+    res.json({
+      id: result.insertedId.toString(),
+      message: 'Interview request submitted successfully',
+      ...request
+    });
+  } catch (error) {
+    console.error('Interview request error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// HR: Get all interview requests with filtering
+app.get('/api/interview-requests', verifyAuth, requireRole(['hr']), async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { status } = req.query;
+
+    const filter = status ? { status } : {};
+    const requests = await database.collection('interview_requests')
+      .find(filter)
+      .sort({ created_at: -1 })
+      .toArray();
+
+    res.json(requests.map(r => ({
+      id: r._id.toString(),
+      ...r
+    })));
+  } catch (error) {
+    console.error('Get interview requests error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Student: Get their interview requests
+app.get('/api/interview-requests/student/:studentId', verifyAuth, async (req, res) => {
+  try {
+    const database = await connectDB();
+    const requests = await database.collection('interview_requests')
+      .find({ userId: new ObjectId(req.params.studentId) })
+      .sort({ created_at: -1 })
+      .toArray();
+
+    res.json(requests.map(r => ({
+      id: r._id.toString(),
+      ...r
+    })));
+  } catch (error) {
+    console.error('Get student interview requests error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Student: Cancel interview request
+app.patch('/api/interview-requests/:id/cancel', verifyAuth, async (req, res) => {
+  try {
+    const database = await connectDB();
+    const requestId = req.params.id;
+    const filters = [];
+    if (ObjectId.isValid(requestId)) filters.push({ _id: new ObjectId(requestId) });
+    filters.push({ id: requestId });
+
+    const result = await database.collection('interview_requests').updateOne(
+      { $or: filters },
+      { $set: { status: 'cancelled', updated_at: new Date() } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Interview request not found' });
+    }
+
+    const updated = await database.collection('interview_requests').findOne({ $or: filters });
+    res.json({ id: updated._id.toString(), message: 'Cancelled', ...updated });
+  } catch (error) {
+    console.error('Cancel interview request error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// HR: Approve interview request
+app.patch('/api/interview-requests/:id/approve', verifyAuth, requireRole(['hr']), async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { scheduledDate, scheduledTime } = req.body;
+    const requestId = req.params.id;
+
+    console.log('Approving interview request:', requestId);
+    console.log('Request type:', typeof requestId);
+    
+    // Build a resilient filter: try _id if valid, else fallback to legacy 'id' field
+    const filters = [];
+    if (ObjectId.isValid(requestId)) {
+      filters.push({ _id: new ObjectId(requestId) });
+    }
+    filters.push({ id: requestId });
+
+    let result = await database.collection('interview_requests').updateOne(
+      { $or: filters },
+      {
+        $set: {
+          status: 'approved',
+          scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
+          scheduledTime: scheduledTime || null,
+          approvedAt: new Date(),
+          updated_at: new Date()
+        }
+      }
+    );
+
+    console.log('Update result (first try):', result);
+
+    // If nothing matched but ID is valid, force retry strictly by _id to log
+    if (result.matchedCount === 0 && ObjectId.isValid(requestId)) {
+      result = await database.collection('interview_requests').updateOne(
+        { _id: new ObjectId(requestId) },
+        {
+          $set: {
+            status: 'approved',
+            scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
+            scheduledTime: scheduledTime || null,
+            approvedAt: new Date(),
+            updated_at: new Date()
+          }
+        }
+      );
+      console.log('Update result (retry by _id):', result);
+    }
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Interview request not found' });
+    }
+
+    // Fetch and return the updated document
+    const updated = await database.collection('interview_requests').findOne(
+      ObjectId.isValid(requestId)
+        ? { $or: [{ _id: new ObjectId(requestId) }, { id: requestId }] }
+        : { id: requestId }
+    );
+
+    res.json({
+      id: updated._id.toString(),
+      message: 'Interview request approved',
+      ...updated
+    });
+  } catch (error) {
+    console.error('Approve interview request error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Student/HR: Schedule interview request (set scheduled date/time and status)
+app.patch('/api/interview-requests/:id/schedule', async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { proposedDate, proposedTime } = req.body;
+    const requestId = req.params.id;
+
+    if (!proposedDate || !proposedTime) {
+      return res.status(400).json({ error: 'proposedDate and proposedTime are required' });
+    }
+
+    const filters = [];
+    if (ObjectId.isValid(requestId)) filters.push({ _id: new ObjectId(requestId) });
+    filters.push({ id: requestId });
+
+    const result = await database.collection('interview_requests').updateOne(
+      { $or: filters },
+      {
+        $set: {
+          status: 'scheduled',
+          scheduledDate: new Date(proposedDate),
+          scheduledTime: proposedTime,
+          updated_at: new Date()
+        }
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Interview request not found' });
+    }
+
+    const updated = await database.collection('interview_requests').findOne({ $or: filters });
+    res.json({ id: updated._id.toString(), message: 'Scheduled', ...updated });
+  } catch (error) {
+    console.error('Schedule interview request error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// HR: Reject interview request
+app.patch('/api/interview-requests/:id/reject', verifyAuth, requireRole(['hr']), async (req, res) => {
+  try {
+    const database = await connectDB();
+    const { rejectionReason } = req.body;
+
+    const requestId = req.params.id;
+    const filters = [];
+    if (ObjectId.isValid(requestId)) {
+      filters.push({ _id: new ObjectId(requestId) });
+    }
+    filters.push({ id: requestId });
+
+    let result = await database.collection('interview_requests').updateOne(
+      { $or: filters },
+      {
+        $set: {
+          status: 'rejected',
+          rejectionReason: rejectionReason || '',
+          rejectedAt: new Date(),
+          updated_at: new Date()
+        }
+      }
+    );
+
+    if (result.matchedCount === 0 && ObjectId.isValid(requestId)) {
+      result = await database.collection('interview_requests').updateOne(
+        { _id: new ObjectId(requestId) },
+        {
+          $set: {
+            status: 'rejected',
+            rejectionReason: rejectionReason || '',
+            rejectedAt: new Date(),
+            updated_at: new Date()
+          }
+        }
+      );
+    }
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Interview request not found' });
+    }
+
+    // Fetch and return the updated document
+    const updated = await database.collection('interview_requests').findOne(
+      ObjectId.isValid(requestId)
+        ? { $or: [{ _id: new ObjectId(requestId) }, { id: requestId }] }
+        : { id: requestId }
+    );
+
+    res.json({
+      id: updated._id.toString(),
+      message: 'Interview request rejected',
+      ...updated
+    });
+  } catch (error) {
+    console.error('Reject interview request error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===================== END: New Interview Scheduling Flow =====================
+
 module.exports = app;
+
+// Health check endpoint
+// Global error handler middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err.message);
+  const status = err.status || 500;
+  const message = err.message || 'Internal Server Error';
+  res.status(status).json({ error: message, status });
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    port: PORT
+  });
+});
 
 // Always listen in development and initialize DB connection
 async function startServer() {
@@ -3465,35 +3775,52 @@ async function startServer() {
     await connectDB();
     
     const server = app.listen(PORT, () => {
-      console.log(`✅ Server on ${PORT}`);
+      console.log(`✅ Server running on port ${PORT}`);
+      console.log(`📡 API: http://localhost:${PORT}/api`);
+      console.log(`💚 Health: http://localhost:${PORT}/health`);
     });
     
     // Keep process alive and handle errors
     server.on('error', (error) => {
-      console.error('❌ Server error:', error);
+      if (error.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} is already in use`);
+        process.exit(1);
+      } else {
+        console.error('❌ Server error:', error);
+      }
     });
     
     // Handle graceful shutdown
     process.on('SIGTERM', () => {
-      console.log('SIGTERM signal received: closing HTTP server');
+      console.log('\n🛑 SIGTERM received: Graceful shutdown initiated');
       server.close(() => {
-        console.log('HTTP server closed');
+        console.log('✅ HTTP server closed');
         mongoose.connection.close().then(() => {
-          console.log('MongoDB connection closed');
+          console.log('✅ MongoDB connection closed');
           process.exit(0);
         });
       });
     });
     
     process.on('SIGINT', () => {
-      console.log('\nSIGINT signal received: closing HTTP server');
+      console.log('\n🛑 SIGINT received: Graceful shutdown initiated');
       server.close(() => {
-        console.log('HTTP server closed');
+        console.log('✅ HTTP server closed');
         mongoose.connection.close().then(() => {
-          console.log('MongoDB connection closed');
+          console.log('✅ MongoDB connection closed');
           process.exit(0);
         });
       });
+    });
+    
+    // Handle unhandled rejections
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('⚠️ Unhandled Rejection at:', promise, 'reason:', reason);
+    });
+    
+    process.on('uncaughtException', (error) => {
+      console.error('💥 Uncaught Exception:', error);
+      process.exit(1);
     });
     
   } catch (error) {

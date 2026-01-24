@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api';
 import Layout from './Layout';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
 
 function PaymentStatus() {
   const [exams, setExams] = useState([]);
@@ -18,16 +16,14 @@ function PaymentStatus() {
   const loadExamStatuses = async () => {
     try {
       // Fetch all exams
-      const examsResponse = await axios.get(`${API_URL}/exams`);
+      const examsResponse = await api.get('/exams');
       const allExams = examsResponse.data;
 
       // Fetch payment status for each exam
       const examStatuses = await Promise.all(
         allExams.map(async (exam) => {
           try {
-            const statusResponse = await axios.get(
-              `${API_URL}/payments/status/${exam.id}/${user.id}`
-            );
+            const statusResponse = await api.get(`/payments/status/${exam.id}/${user.id}`);
             console.log(`Exam ${exam.title} status:`, statusResponse.data);
             return {
               ...exam,
@@ -58,23 +54,34 @@ function PaymentStatus() {
     // Check specific statuses first
     if (status === 'pending_verification') {
       return {
-        text: '⏳ Pending Approval',
+        text: 'Pending for Approval',
         className: 'status-pending',
-        color: '#ed8936'
+        color: '#f56565',
+        signal: '🔴'
+      };
+    }
+    if (status === 'pending') {
+      return {
+        text: 'Pending for Approval',
+        className: 'status-pending',
+        color: '#f56565',
+        signal: '🔴'
       };
     }
     if (status === 'completed' || paid) {
       return {
-        text: '✅ Approved',
+        text: 'Approved - Take Exam Now',
         className: 'status-approved',
-        color: '#38a169'
+        color: '#38a169',
+        signal: '🟢'
       };
     }
     if (status === 'rejected') {
       return {
         text: '❌ Rejected',
         className: 'status-rejected',
-        color: '#e53e3e'
+        color: '#e53e3e',
+        signal: '🔴'
       };
     }
     // If not paid and no specific status, show Not Paid
@@ -82,13 +89,15 @@ function PaymentStatus() {
       return {
         text: '❌ Not Paid',
         className: 'status-not-paid',
-        color: '#e53e3e'
+        color: '#e53e3e',
+        signal: '🔴'
       };
     }
     return {
       text: '❓ Unknown',
       className: 'status-unknown',
-      color: '#718096'
+      color: '#718096',
+      signal: '⚪'
     };
   };
 
@@ -97,7 +106,7 @@ function PaymentStatus() {
     
     if (statusBadge.text === '❌ Not Paid') {
       navigate(`/payment/${exam.id}`);
-    } else if (statusBadge.text === '✅ Approved') {
+    } else if (statusBadge.text === 'Approved - Take Exam Now') {
       navigate(`/take-exam/${exam.id}`);
     }
   };
@@ -146,9 +155,9 @@ function PaymentStatus() {
         <div style={styles.examGrid}>
           {exams.map((exam) => {
             const statusBadge = getStatusBadge(exam.paymentStatus, exam.paid);
-            const canTakeExam = statusBadge.text === '✅ Approved';
+            const canTakeExam = statusBadge.text === 'Approved - Take Exam Now';
             const canPay = statusBadge.text === '❌ Not Paid';
-            const isPending = statusBadge.text === '⏳ Pending Approval';
+            const isPending = statusBadge.text === 'Pending for Approval';
 
             return (
               <div key={exam.id} style={styles.examCard}>
@@ -160,7 +169,7 @@ function PaymentStatus() {
                       backgroundColor: statusBadge.color
                     }}
                   >
-                    {statusBadge.text}
+                    {statusBadge.signal} {statusBadge.text}
                   </span>
                 </div>
 

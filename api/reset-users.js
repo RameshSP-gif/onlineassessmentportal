@@ -4,14 +4,10 @@ const bcrypt = require('bcrypt');
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://root:Rakshita%401234@cluster0.pp8rwbt.mongodb.net/assessmentdb?retryWrites=true&w=majority';
 
-// Test users - 2 for each role
+// Test users - 2 for each role (student and hr only)
 const testUsers = [
-  { username: 'admin1', email: 'admin1@test.com', password: 'admin123', fullName: 'Admin User One', role: 'admin' },
-  { username: 'admin2', email: 'admin2@test.com', password: 'admin123', fullName: 'Admin User Two', role: 'admin' },
   { username: 'hr1', email: 'hr1@test.com', password: 'hr123', fullName: 'HR Manager One', role: 'hr' },
   { username: 'hr2', email: 'hr2@test.com', password: 'hr123', fullName: 'HR Manager Two', role: 'hr' },
-  { username: 'interviewer1', email: 'interviewer1@test.com', password: 'int123', fullName: 'Interviewer One', role: 'interviewer' },
-  { username: 'interviewer2', email: 'interviewer2@test.com', password: 'int123', fullName: 'Interviewer Two', role: 'interviewer' },
   { username: 'student1', email: 'student1@test.com', password: 'student123', fullName: 'Student User One', role: 'student' },
   { username: 'student2', email: 'student2@test.com', password: 'student123', fullName: 'Student User Two', role: 'student' }
 ];

@@ -8,7 +8,13 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "server": "node api/index.js",
+    "start:backend": "node api/index.js",
+    "start:backend:5005": "cross-env PORT=5005 node api/index.js",
+    "start:frontend:3003": "cross-env PORT=3003 react-scripts start",
     "dev": "concurrently \"react-scripts start\" \"node api/index.js\"",
+    "dev:5005": "concurrently -n BE,FE -c cyan,magenta \"cross-env PORT=5005 node api/index.js\" \"cross-env PORT=3003 react-scripts start\"",
+    "test:api": "jest --config jest.config.js --runInBand",
+    "test:video:api": "node test-backend-video.js",
     "seed": "node api/seed.js",
     "seed-users": "node api/seed-users.js",
     "reset-users": "node api/reset-users.js",
@@ -34,7 +40,11 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "nodemon": "^3.0.1"
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.0.1",
+    "jest": "^29.7.0",
+    "mongodb-memory-server": "^10.1.4",
+    "supertest": "^6.3.4"
   },
   "eslintConfig": {
     "extends": [

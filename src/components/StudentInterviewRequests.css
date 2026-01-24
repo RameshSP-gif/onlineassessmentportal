@@ -307,6 +307,7 @@
 
 .card-actions button {
   flex: 1;
+  min-width: 100px;
   padding: 12px 20px;
   border: none;
   border-radius: 8px;
@@ -326,8 +327,106 @@
   color: white;
 }
 
+.btn-schedule {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.btn-schedule:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+}
+
 .btn-join {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.btn-join:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+}
+
+.btn-view-results {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: white;
+}
+
+.btn-view-results:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(79, 172, 254, 0.3);
+}
+
+.btn-confirm {
+  flex: 1;
+  min-width: 100px;
+  padding: 10px 20px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-confirm:hover:not(:disabled) {
+  background: #059669;
+  transform: translateY(-2px);
+}
+
+.btn-confirm:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+}
+
+.btn-cancel-form {
+  flex: 1;
+  min-width: 100px;
+  padding: 10px 20px;
+  background: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-cancel-form:hover {
+  background: #4b5563;
+  transform: translateY(-2px);
+}
+
+.schedule-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+  padding: 15px;
+  background: #f3f4f6;
+  border-radius: 8px;
+  margin-top: 10px;
+}
+
+.schedule-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 10px;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.schedule-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.btn-join {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
   color: white;
 }
 
@@ -365,7 +464,7 @@
   }
 
   .requests-header h1 {
-    font-size: 28px;
+    font-size: 24px;
   }
 
   .btn-new-request {
@@ -374,13 +473,91 @@
 
   .requests-grid {
     grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .request-card {
+    padding: 15px;
   }
 
   .card-actions {
     flex-direction: column;
+    gap: 8px;
   }
 
   .card-actions button {
     width: 100%;
+    min-width: auto;
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+
+  .schedule-form {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .schedule-input,
+  .btn-confirm,
+  .btn-cancel-form {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .proposed-dates-list {
+    flex-direction: column;
+  }
+
+  .info-row {
+    flex-direction: column;
+    gap: 5px;
+  }
+}
+
+@media (max-width: 480px) {
+  .student-requests-container {
+    padding: 15px 10px;
+  }
+
+  .requests-header h1 {
+    font-size: 20px;
+  }
+
+  .request-card {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .card-body h3 {
+    font-size: 18px;
+    margin-bottom: 10px;
+  }
+
+  .card-actions {
+    gap: 6px;
+  }
+
+  .card-actions button {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .schedule-input {
+    padding: 8px;
+    font-size: 14px;
+  }
+
+  .schedule-form {
+    padding: 10px;
+  }
+
+  .proposed-dates-section {
+    padding: 10px;
+    margin-top: 10px;
+  }
+
+  .date-chip {
+    padding: 8px;
+    font-size: 12px;
   }
 }

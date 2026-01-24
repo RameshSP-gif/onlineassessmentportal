@@ -16,15 +16,15 @@ import InterviewList from './components/InterviewList';
 import InterviewPayment from './components/InterviewPayment';
 import TakeInterview from './components/TakeInterview';
 import InterviewStatus from './components/InterviewStatus';
-import AdminInterviewPayments from './components/AdminInterviewPayments';
-import AdminDashboard from './components/AdminDashboard';
+import HRInterviewPayments from './components/HRInterviewPayments';
+import HRDashboard from './components/HRDashboard';
 import StudentManagement from './components/StudentManagement';
 import ExamManagement from './components/ExamManagement';
 import FeeManagement from './components/FeeManagement';
 import ReportsPage from './components/ReportsPage';
 import NotificationsPage from './components/NotificationsPage';
 import SubmissionsView from './components/SubmissionsView';
-import AdminPaymentVerification from './components/AdminPaymentVerification';
+import HRPaymentVerification from './components/HRPaymentVerification';
 import InterviewerRegister from './components/InterviewerRegister';
 import InterviewerLogin from './components/InterviewerLogin';
 import InterviewerDashboard from './components/InterviewerDashboard';
@@ -32,8 +32,9 @@ import InterviewerVideoInterview from './components/InterviewerVideoInterview';
 import InterviewReview from './components/InterviewReview';
 import RoleManagement from './components/RoleManagement';
 import UserManagement from './components/UserManagement';
-import HRDashboard from './components/HRDashboard';
 import StudentInterviewRequests from './components/StudentInterviewRequests';
+import ScheduleInterviewRequest from './components/ScheduleInterviewRequest';
+import HRInterviewRequests from './components/HRInterviewRequests';
 
 function App() {
   const isAuthenticated = () => {
@@ -76,13 +77,14 @@ function App() {
         <Route path="/payment/:examId" element={<ProtectedRoute allowedRoles={['student']}><Payment /></ProtectedRoute>} />
         <Route path="/take-exam/:id" element={<ProtectedRoute allowedRoles={['student']}><TakeExam /></ProtectedRoute>} />
         <Route path="/exam/:id" element={<ProtectedRoute allowedRoles={['student']}><TakeExam /></ProtectedRoute>} />
-        <Route path="/results" element={<ProtectedRoute allowedRoles={['student']}><Results /></ProtectedRoute>} />
         <Route path="/interview" element={<ProtectedRoute allowedRoles={['student']}><VideoInterview /></ProtectedRoute>} />
         
         {/* Student Interview Routes */}
         <Route path="/interviews" element={<ProtectedRoute allowedRoles={['student']}><InterviewList /></ProtectedRoute>} />
+        <Route path="/interview-list" element={<ProtectedRoute allowedRoles={['student']}><InterviewList /></ProtectedRoute>} />
         <Route path="/interview-status" element={<ProtectedRoute allowedRoles={['student']}><InterviewStatus /></ProtectedRoute>} />
         <Route path="/interview-payment/:courseId" element={<ProtectedRoute allowedRoles={['student']}><InterviewPayment /></ProtectedRoute>} />
+        <Route path="/schedule-interview-request/:courseId" element={<ProtectedRoute allowedRoles={['student']}><ScheduleInterviewRequest /></ProtectedRoute>} />
         <Route path="/take-interview/:courseId" element={<ProtectedRoute allowedRoles={['student']}><TakeInterview /></ProtectedRoute>} />
         <Route path="/interview-requests" element={<ProtectedRoute allowedRoles={['student']}><StudentInterviewRequests /></ProtectedRoute>} />
         
@@ -95,21 +97,22 @@ function App() {
         
         {/* HR Routes */}
         <Route path="/hr/dashboard" element={<ProtectedRoute allowedRoles={['hr']}><HRDashboard /></ProtectedRoute>} />
-        <Route path="/hr/interview-requests" element={<ProtectedRoute allowedRoles={['hr']}><StudentInterviewRequests /></ProtectedRoute>} />
+        <Route path="/hr/interview-requests" element={<ProtectedRoute allowedRoles={['hr']}><HRInterviewRequests /></ProtectedRoute>} />
         
         {/* Admin Routes */}
-        <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
-        <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
-        <Route path="/admin/students" element={<ProtectedRoute allowedRoles={['admin']}><StudentManagement /></ProtectedRoute>} />
-        <Route path="/admin/exams" element={<ProtectedRoute allowedRoles={['admin']}><ExamManagement /></ProtectedRoute>} />
-        <Route path="/admin/payments" element={<ProtectedRoute allowedRoles={['admin']}><AdminPaymentVerification /></ProtectedRoute>} />
-        <Route path="/admin/interview-payments" element={<ProtectedRoute allowedRoles={['admin']}><AdminInterviewPayments /></ProtectedRoute>} />
-        <Route path="/admin/fees" element={<ProtectedRoute allowedRoles={['admin']}><FeeManagement /></ProtectedRoute>} />
-        <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']}><ReportsPage /></ProtectedRoute>} />
-        <Route path="/admin/notifications" element={<ProtectedRoute allowedRoles={['admin']}><NotificationsPage /></ProtectedRoute>} />
-        <Route path="/admin/submissions" element={<ProtectedRoute allowedRoles={['admin']}><SubmissionsView /></ProtectedRoute>} />
-        <Route path="/admin/roles" element={<ProtectedRoute allowedRoles={['admin']}><RoleManagement /></ProtectedRoute>} />
-        <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><UserManagement /></ProtectedRoute>} />
+        <Route path="/hr" element={<ProtectedRoute allowedRoles={['hr']}><HRDashboard /></ProtectedRoute>} />
+        <Route path="/hr/dashboard" element={<ProtectedRoute allowedRoles={['hr']}><HRDashboard /></ProtectedRoute>} />
+        <Route path="/hr/students" element={<ProtectedRoute allowedRoles={['hr']}><StudentManagement /></ProtectedRoute>} />
+        <Route path="/hr/exams" element={<ProtectedRoute allowedRoles={['hr']}><ExamManagement /></ProtectedRoute>} />
+        <Route path="/hr/payments" element={<ProtectedRoute allowedRoles={['hr']}><HRPaymentVerification /></ProtectedRoute>} />
+        <Route path="/hr/interview-payments" element={<ProtectedRoute allowedRoles={['hr']}><HRInterviewPayments /></ProtectedRoute>} />
+        <Route path="/hr/interview-requests" element={<ProtectedRoute allowedRoles={['hr']}><HRInterviewRequests /></ProtectedRoute>} />
+        <Route path="/hr/fees" element={<ProtectedRoute allowedRoles={['hr']}><FeeManagement /></ProtectedRoute>} />
+        <Route path="/hr/reports" element={<ProtectedRoute allowedRoles={['hr']}><ReportsPage /></ProtectedRoute>} />
+        <Route path="/hr/notifications" element={<ProtectedRoute allowedRoles={['hr']}><NotificationsPage /></ProtectedRoute>} />
+        <Route path="/hr/submissions" element={<ProtectedRoute allowedRoles={['hr']}><SubmissionsView /></ProtectedRoute>} />
+        <Route path="/hr/roles" element={<ProtectedRoute allowedRoles={['hr']}><RoleManagement /></ProtectedRoute>} />
+        <Route path="/hr/users" element={<ProtectedRoute allowedRoles={['hr']}><UserManagement /></ProtectedRoute>} />
         
         <Route path="/" element={<Navigate to="/login" />} />
       </Routes>

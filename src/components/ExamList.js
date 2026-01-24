@@ -103,13 +103,13 @@ function ExamList() {
                             💰 ₹200
                           </span>
                         )}
-                        {status === 'pending_verification' && (
+                        {(status === 'pending_verification' || status === 'pending') && (
                           <span className="badge" style={{ 
                             marginLeft: '10px', 
                             background: '#3b82f6', 
                             color: 'white' 
                           }}>
-                            ⏳ Pending Approval
+                            {status === 'pending' ? '⏳ Pending (Upload/Verify)' : '⏳ Pending Approval'}
                           </span>
                         )}
                         {isPaid && (
@@ -131,9 +131,15 @@ function ExamList() {
                           }
                         }}
                         className="btn btn-primary"
-                        disabled={status === 'pending_verification'}
+                        disabled={status === 'pending_verification' || status === 'pending'}
                       >
-                        {status === 'pending_verification' ? 'Awaiting Approval' : isPaid ? 'Start Exam' : 'Pay & Start'}
+                        {status === 'pending_verification'
+                          ? 'Awaiting Approval'
+                          : status === 'pending'
+                          ? 'Pending (Upload/Verify)'
+                          : isPaid
+                          ? 'Start Exam'
+                          : 'Pay & Start'}
                       </button>
                     </div>
                   </div>

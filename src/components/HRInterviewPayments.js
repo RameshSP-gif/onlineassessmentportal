@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import Layout from './Layout';
-import './AdminDashboard.css';
+import './HRDashboard.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
 
-function AdminInterviewPayments() {
+function HRInterviewPayments() {
   const [pendingPayments, setPendingPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState({});
@@ -156,4 +156,4 @@ function AdminInterviewPayments() {
   );
 }
 
-export default AdminInterviewPayments;
+export default HRInterviewPayments;

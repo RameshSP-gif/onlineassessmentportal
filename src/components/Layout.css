@@ -154,104 +154,36 @@
 }
 
 /* Sidebar */
-.layout-sidebar {
-  background: white;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
-  overflow-y: auto;
-}
 
-.layout-sidebar.open {
-  width: 250px;
-}
 
-.layout-sidebar.closed {
-  width: 70px;
-}
 
-.sidebar-nav {
-  padding: 16px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
 
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 20px;
-  border: none;
-  background: transparent;
-  color: #2d3748;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: left;
-  font-size: 15px;
-  border-left: 4px solid transparent;
-  width: 100%;
-  font-weight: 600;
-}
 
-.nav-item:nth-child(1) .nav-label { color: #8b5cf6; } /* Purple - Dashboard */
-.nav-item:nth-child(2) .nav-label { color: #3b82f6; } /* Blue - Browse Exams */
-.nav-item:nth-child(3) .nav-label { color: #10b981; } /* Green - Exam Payments */
-.nav-item:nth-child(4) .nav-label { color: #f59e0b; } /* Orange - Browse Interviews */
-.nav-item:nth-child(5) .nav-label { color: #ec4899; } /* Pink - Interview Payments */
-.nav-item:nth-child(6) .nav-label { color: #06b6d4; } /* Cyan - My Results */
 
-.nav-item:hover {
-  background: #f7fafc;
-  transform: translateX(4px);
-}
 
-.nav-item.active {
-  background: linear-gradient(90deg, #eef2ff 0%, #e0e7ff 100%);
-  border-left-color: #667eea;
-  transform: translateX(4px);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
-}
 
-.nav-icon {
-  font-size: 20px;
-  min-width: 24px;
-  text-align: center;
-}
 
-.nav-label {
-  white-space: normal;
-  line-height: 1.3;
-  word-wrap: break-word;
-}
 
-.nav-logout {
-  margin-top: auto;
-  background: #fee2e2 !important;
-  color: #dc2626 !important;
-  border-left-color: #dc2626 !important;
-}
+ /* Purple - Dashboard */
+ /* Blue - Browse Exams */
+ /* Green - Exam Payments */
+ /* Orange - Browse Interviews */
+ /* Pink - Interview Payments */
+ /* Cyan - My Results */
 
-.nav-logout:hover {
-  background: #fecaca !important;
-  transform: translateX(4px);
-}
 
-.nav-logout .nav-label {
-  color: #dc2626 !important;
-  font-weight: 700 !important;
-}
 
-.layout-sidebar.closed .nav-label {
-  display: none;
-}
 
-/* Main Content */
-.layout-main {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
-  transition: margin-left 0.3s ease;
-}
+
+
+
+
+
+
+
+
+
+
 
 .layout-main.sidebar-open {
   margin-left: 0;
@@ -314,19 +246,9 @@
     flex-direction: column;
   }
 
-  .layout-sidebar.open {
-    position: fixed;
-    left: 0;
-    top: 64px;
-    bottom: 0;
-    z-index: 90;
-    width: 240px;
-  }
   
-  .layout-sidebar.closed {
-    width: 0;
-    overflow: hidden;
-  }
+  
+  
   
   .footer-content {
     flex-direction: column;
@@ -348,11 +270,6 @@
   .nimblix-logo {
     height: 32px;
   }
-  .layout-main {
-    padding: 16px;
-  }
-  .nav-item {
-    padding: 12px 16px;
-    font-size: 14px;
-  }
+  .layout-main-full { flex: 1; padding: 24px; overflow-y: auto; background: #f5f7fa; width: 100%; max-width: 1400px; margin: 0 auto; }
+  
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { exams, submissions, interviews } from '../api';
+import { exams, submissions } from '../api';
+import api from '../api';
 import Layout from './Layout';
 import './Dashboard.css';
 
@@ -27,25 +28,55 @@ function Dashboard() {
       setError(null);
       setLoading(true);
       
-      const [examsRes, submissionsRes, interviewsRes] = await Promise.all([
+      const userData = JSON.parse(localStorage.getItem('user'));
+      
+      const [examsRes, submissionsRes, interviewCoursesRes] = await Promise.all([
         exams.getAll().catch(err => {
           console.error('Failed to load exams:', err);
-          throw err;
+          return { data: [] };
         }),
         submissions.getMine().catch(err => {
           console.error('Failed to load submissions:', err);
-          throw err;
+          return { data: [] };
         }),
-        interviews.getMine().catch(err => {
-          console.error('Failed to load interviews:', err);
-          throw err;
+        api.get('/interview-courses').catch(err => {
+          console.error('Failed to load interview courses:', err);
+          return { data: [] };
         })
       ]);
+      
+      // Count interviews with proper status checking
+      let availableCount = 0;
+      let pendingCount = 0;
+      let scheduledCount = 0;
+      
+      for (const course of (interviewCoursesRes.data || [])) {
+        try {
+          const paymentRes = await api.get(`/interview-payments/status/${course.id}/${userData.id}`);
+          const requestRes = await api.get(`/student/${userData.id}/interview-requests`).catch(() => ({ data: [] }));
+          const courseRequest = (requestRes.data || []).find(r => 
+            String(r.courseId) === String(course.id) || String(r.courseId?._id) === String(course.id)
+          );
+          
+          if (!paymentRes.data.paid && paymentRes.data.status !== 'pending_verification' && paymentRes.data.status !== 'pending') {
+            availableCount++;
+          } else if (paymentRes.data.status === 'pending_verification' || paymentRes.data.status === 'pending' || (courseRequest && courseRequest.status === 'pending')) {
+            pendingCount++;
+          } else if (paymentRes.data.paid && courseRequest && (courseRequest.status === 'approved' || courseRequest.status === 'scheduled')) {
+            scheduledCount++;
+          }
+        } catch (err) {
+          availableCount++; // Default to available if status check fails
+        }
+      }
       
       setStats({
         exams: Array.isArray(examsRes.data) ? examsRes.data.length : 0,
         submissions: Array.isArray(submissionsRes.data) ? submissionsRes.data.length : 0,
-        interviews: Array.isArray(interviewsRes.data) ? interviewsRes.data.length : 0
+        interviews: availableCount,
+        pendingInterviews: pendingCount,
+        scheduledInterviews: scheduledCount,
+        totalInterviews: (interviewCoursesRes.data || []).length
       });
       setError(null);
     } catch (error) {
@@ -113,28 +144,45 @@ function Dashboard() {
             </div>
           </div>
 
-          <div className="stat-card">
+          <div className="stat-card" onClick={() => navigate('/interviews')} style={{ cursor: 'pointer' }}>
             <div className="stat-icon" style={{ background: '#f56565' }}>🎥</div>
             <div>
-              <h3>{stats.interviews}</h3>
-              <p>Video Interviews</p>
+              <h3>{stats.totalInterviews || stats.interviews}</h3>
+              <p>Total Interviews</p>
+              <div style={{ fontSize: '12px', marginTop: '5px', color: '#718096' }}>
+                {stats.interviews > 0 && <span>💰 {stats.interviews} Available</span>}
+                {stats.pendingInterviews > 0 && <span> • ⏳ {stats.pendingInterviews} Pending</span>}
+                {stats.scheduledInterviews > 0 && <span> • 📅 {stats.scheduledInterviews} Scheduled</span>}
+              </div>
             </div>
           </div>
         </div>
 
         <div className="action-buttons">
           <button onClick={() => navigate('/exams')} className="btn btn-primary">
-            Take Exam
+              📝 Take Exam
           </button>
-          <button onClick={() => navigate('/interview')} className="btn btn-success">
-            Video Interview
+            <button 
+              onClick={() => navigate('/interview-list')} 
+              className="btn btn-success"
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                fontSize: '16px',
+                fontWeight: '700',
+                padding: '12px 24px',
+                boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+                cursor: 'pointer',
+                color: 'white'
+              }}
+            >
+              🎤💰 Pay and Schedule Interview Now
           </button>
           <button onClick={() => navigate('/results')} className="btn btn-secondary">
-            View Results
+              📊 View Results
           </button>
           {user?.role === 'admin' && (
             <button onClick={() => navigate('/admin')} className="btn btn-danger">
-              Admin Panel
+                ⚙️ Admin Panel
             </button>
           )}
         </div>

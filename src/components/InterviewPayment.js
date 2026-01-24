@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Layout from './Layout';
 import './Payment.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3002/api';
 
 function InterviewPayment() {
   const { courseId } = useParams();
@@ -18,6 +18,18 @@ function InterviewPayment() {
   const [paymentMessage, setPaymentMessage] = useState('');
   const [currentOrderId, setCurrentOrderId] = useState('');
   const [pollingInterval, setPollingInterval] = useState(null);
+  const [qrIndex, setQrIndex] = useState(0);
+  const [qrFailed, setQrFailed] = useState(false);
+
+  const qrSources = useMemo(() => {
+    const root = process.env.PUBLIC_URL || '';
+    // Try explicit root path then plain path as a fallback. Add a final data URL guard so UI never stays blank.
+    return [
+      `${root}/phonepe-qr.jpg`,
+      '/phonepe-qr.jpg',
+      'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320"%3E%3Crect width="320" height="320" fill="%23f3f4f6"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23667eea" font-family="Arial" font-size="16"%3EQR unavailable%3C/text%3E%3Ctext x="50%25" y="60%25" dominant-baseline="middle" text-anchor="middle" fill="%236b7280" font-family="Arial" font-size="12"%3EUse UPI ID below%3C/text%3E%3C/svg%3E'
+    ];
+  }, []);
 
   useEffect(() => {
     initializePayment();
@@ -180,13 +192,33 @@ function InterviewPayment() {
               <h3>Scan & Pay ₹200</h3>
               <div className="qr-image-container">
                 <img 
-                  src="/phonepe-qr.jpg" 
+                  src={qrSources[qrIndex]}
                   alt="UPI Payment QR Code"
                   className="qr-image"
+                  onError={() => {
+                    if (qrIndex < qrSources.length - 1) {
+                      setQrIndex((idx) => idx + 1);
+                    } else {
+                      setQrFailed(true);
+                    }
+                  }}
                 />
+                <button
+                  type="button"
+                  className="btn-download"
+                  onClick={() => window.open('/phonepe-qr.jpg', '_blank')}
+                  style={{ marginTop: '10px' }}
+                >
+                  ⬇️ Download QR (opens new tab)
+                </button>
+                {qrFailed && (
+                  <div className="qr-fallback-text">
+                    QR image fallback shown. If you still can't see it, use the UPI ID below or download the QR.
+                  </div>
+                )}
               </div>
               <p className="merchant-info">Pay to: RAMESH S P</p>
-              <p className="upi-note">Use any UPI app to scan & pay</p>
+              <p className="upi-note">Use any UPI app to scan & pay. UPI ID: <strong>rameshsp@ybl</strong></p>
             </div>
           </div>
 

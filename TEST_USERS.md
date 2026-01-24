@@ -2,102 +2,79 @@
 
 ## Quick Reference for Testing
 
-All test users have been created in the database for easy testing of all functionalities.
-
-### 👨‍💼 Admin Users
-- **Username:** `admin1` | **Password:** `admin123`
-- **Username:** `admin2` | **Password:** `admin123`
-
-**Features to Test:**
-- Access admin dashboard
-- Manage roles (CRUD)
-- Manage users (CRUD)
-- Assign roles to users
-- Manage exams
-- Verify payments
-- View reports
+All test users have been created in the database for easy testing. The system now uses only 2 roles: **HR** and **Student**.
 
 ### 👔 HR Users
 - **Username:** `hr1` | **Password:** `hr123`
 - **Username:** `hr2` | **Password:** `hr123`
 
 **Features to Test:**
-- View interview requests
-- Approve/reject interview requests
-- Assign interviewers
-- Schedule interviews
-- HR dashboard statistics
-
-### 🎤 Interviewer Users
-- **Username:** `interviewer1` | **Password:** `int123`
-- **Username:** `interviewer2` | **Password:** `int123`
-
-**Features to Test:**
-- View assigned interviews
-- Conduct video interviews
-- Record interview sessions
-- Provide feedback
-- Review past interviews
+- Access HR dashboard
+- Manage interview payments (approve/reject)
+- Manage interview requests (approve/reject scheduling)
+- View all system statistics
+- Manage students and users
 
 ### 📚 Student Users
 - **Username:** `student1` | **Password:** `student123`
 - **Username:** `student2` | **Password:** `student123`
 
 **Features to Test:**
-- Take exams
-- Submit answers
-- View results
-- Request interviews (Human/AI)
+- Browse available interview courses
+- Pay ₹200 for interviews using QR code
+- Upload payment proof
+- Request interview schedules after payment approval
 - Propose interview dates
 - Join scheduled interviews
-- View interview history
+- View interview history and status
 
 ## Re-seeding Users
 
 If you need to recreate all test users, run:
 
 ```bash
-npm run seed-users
+node api/reset-users.js
 ```
 
 This script will:
-- Skip existing users (won't duplicate)
-- Create missing test users
+- Delete all existing test users
+- Create fresh HR and Student users
 - Display all credentials after completion
 
 ## Login Process
 
-1. Navigate to appropriate login page:
-   - Students/Admin: `/login`
-   - Interviewers: `/interviewer/login`
-   - HR: `/hr/login` (when implemented)
+1. Navigate to login page: `/login`
+2. Enter username and password
+3. System will redirect to appropriate dashboard based on role:
+   - HR users → `/hr/dashboard`
+   - Student users → `/dashboard`
 
-2. Enter username and password (not email!)
+## Testing Workflows
 
-3. System will redirect to appropriate dashboard based on role
+### Student Interview Flow
+1. Login as `student1`
+2. Navigate to "Browse Interviews" or click interview card on dashboard
+3. Select an interview course
+4. Click "Pay & Schedule Interview Now"
+5. Upload payment screenshot
+6. Wait for HR approval
+7. After approval, propose interview date/time
+8. Wait for HR to approve schedule
 
-## Testing Role Assignment
+### HR Payment Approval Flow
+1. Login as `hr1`
+2. Go to HR Dashboard
+3. Click "Interview Payments" card or navigate to `/hr/interview-payments`
+4. Review pending payments
+5. View payment proof screenshots
+6. Approve or reject payments
 
-1. Login as `admin1` or `admin2`
-2. Navigate to `/admin/users`
-3. Select any user
-4. Click "Assign Role"
-5. Choose a different role
-6. Verify role change in user list
-
-## Testing User Management
-
-1. Login as admin
-2. Navigate to `/admin/users`
-3. Create new user
-4. Edit existing user
-5. Delete user
-6. Search/filter users
-
-## Testing Role Management
-
-1. Login as admin
-2. Navigate to `/admin/roles`
+### HR Schedule Approval Flow
+1. Login as `hr1`
+2. Go to HR Dashboard
+3. Click "Interview Requests" card or navigate to `/hr/interview-requests`
+4. Review pending schedule requests
+5. Approve with confirmation or reject with reason
 3. Create custom role (e.g., "moderator", "manager")
 4. Add permissions
 5. Edit role
